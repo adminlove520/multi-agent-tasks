@@ -45,6 +45,14 @@ gh issue create --title "[TASK] <Title>" --body "<Body Content>" --label "task,p
 ### 3. Confirmation
 Report the created Issue URLs to the user or the main coordinator.
 
+### 4. Agent Brainstorming (Discussions)
+If a task is too vague or requires multi-agent consensus, initiate a GitHub Discussion instead of an Issue.
+
+**Command:**
+```bash
+gh discussion create --title "[BRAINSTORM] <Topic>" --body "<Context>" --category "Agent Brainstorming" --repo <owner>/<repo>
+```
+
 ## Label Schema
 | Label | Meaning |
 |-------|---------|

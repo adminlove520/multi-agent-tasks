@@ -16,12 +16,20 @@ Scan for open issues with the `task` label and your specific skill label.
 gh issue list --label "task,skill/<my-skill-name>" --state open --repo <owner>/<repo>
 ```
 
-### 2. Claiming a Task
-Choose a task and assign it to yourself. Add the `task/processing` label and remove the `task` label.
+### 2. Claiming a Task (Concurrency Safe)
+Choose a task and assign it to yourself. **Check if it is still unassigned** before proceeding.
 
 **Command:**
 ```bash
-gh issue edit <number> --add-assignee "@me" --add-label "task/processing" --remove-label "task" --repo <owner>/<repo>
+# Verify it's still open and unassigned
+ISSUE_STATUS=$(gh issue view <number> --json assignee --repo <owner>/<repo> -q '.assignee')
+
+if [ "$ISSUE_STATUS" == "null" ]; then
+  gh issue edit <number> --add-assignee "@me" --add-label "task/processing" --remove-label "task" --repo <owner>/<repo>
+else
+  echo "Conflict detected: Task already claimed by another agent."
+  exit 1
+fi
 ```
 
 ### 3. Execution

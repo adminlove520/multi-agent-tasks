@@ -1,0 +1,19 @@
+name: Agent Heartbeat Monitor
+
+on:
+  schedule:
+    - cron: '*/30 * * * *' # Every 30 minutes
+  workflow_dispatch:
+
+jobs:
+  check-heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Agent Activity
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Fetch recent comments from agents to verify they are alive
+          # If no activity for 2 hours, post an alert to Discussions
+          echo "Scanning for inactive agents..."
+          # Implementation logic would go here

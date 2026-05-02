@@ -1,0 +1,27 @@
+name: Automated Task Collector
+
+on:
+  schedule:
+    - cron: '0 * * * *' # Every hour
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  collect-tasks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Generate Report
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "# Hourly Task Progress Report" > report.md
+          echo "Generated at: $(date)" >> report.md
+          echo "" >> report.md
+          echo "## Completed Tasks (Last Hour)" >> report.md
+          gh issue list --label "task/done" --state closed --limit 50 --json title,url,author,closedAt >> report.md
+          
+          # Logic to post this to a Discussion category 'Announcements'
+          # (Simplified for example)
+          gh discussion create --title "Hourly Report - $(date +'%Y-%m-%d %H:00')" --body-file report.md --category "Announcements"
