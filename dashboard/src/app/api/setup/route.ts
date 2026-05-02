@@ -15,11 +15,26 @@ export async function POST() {
   try {
     const { owner, repo } = await getRepoInfo(octokit);
     
-    // 1. 获取当前 Webhooks 列表，避免重复
-    const { data: hooks } = await octokit.rest.repos.listWebhooks({ owner, repo });
+    // 1. 确定 Webhook URL
+    let baseUrl = process.env.NEXTAUTH_URL;
+    if (!baseUrl && process.env.VERCEL_URL) {
+      baseUrl = `https://${process.env.VERCEL_URL}`;
+    }
     
-    const baseUrl = process.env.NEXTAUTH_URL || `https://${process.env.VERCEL_URL}`;
+    // 如果都没有，尝试从请求头推断 (Next.js 推荐做法)
+    if (!baseUrl) {
+      const host = req.headers.get("host");
+      baseUrl = host ? `https://${host}` : "";
+    }
+
+    if (!baseUrl) {
+      return NextResponse.json({ error: "Could not determine base URL. Please set NEXTAUTH_URL." }, { status: 400 });
+    }
+
     const webhookUrl = `${baseUrl}/api/webhook`;
+
+    // 2. 获取当前 Webhooks 列表，避免重复
+    const { data: hooks } = await octokit.rest.repos.listWebhooks({ owner, repo });
 
     const existingHook = hooks.find(h => h.config.url === webhookUrl);
 

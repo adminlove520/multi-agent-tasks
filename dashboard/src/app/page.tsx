@@ -377,8 +377,16 @@ export default function Home() {
                           setLoading(true);
                           try {
                             const res = await fetch("/api/setup", { method: "POST" });
-                            if (res.ok) alert(t.setup.setup_success);
-                          } catch (e) { console.error(e); }
+                            const data = await res.json();
+                            if (res.ok) {
+                              alert(t.setup.setup_success);
+                            } else {
+                              alert(`Setup Failed: ${data.error || "Unknown error"}`);
+                            }
+                          } catch (e: any) { 
+                            console.error(e);
+                            alert(`Request Failed: ${e.message}`);
+                          }
                           finally { setLoading(false); }
                         }}
                         disabled={loading}
