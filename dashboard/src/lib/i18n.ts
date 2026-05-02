@@ -59,9 +59,51 @@ export const translations = {
     no_tasks: "未找到任务。创建一个来开始吧！",
     connected_to: "已连接至",
     tabs: {
+      tasks: "Tasks",
+      agents: "Agents",
+      skills: "Skills",
+      telegram: "Telegram",
+      sub: {
+        all: "All",
+        open: "Todo",
+        processing: "In Progress",
+        done: "Completed"
+      }
+    },
+    telegram: {
+      title: "Telegram Center",
+      bot_token: "Bot Token",
+      channel_id: "Channel ID",
+      status: "Connection Status",
+      test: "Send Test Message",
+      guide: "Setup Guide",
+      step1: "1. Create a Bot via @BotFather",
+      step2: "2. Create a Channel and link a Group",
+      step3: "3. Add Bot as Admin to the Channel",
+    }
+  },
+  zh: {
+    title: "任务看板",
+    new_task: "新建任务",
+    sign_out: "退出登录",
+    sign_in: "使用 GitHub 登录",
+    welcome: "多智能体任务中心",
+    please_sign_in: "请使用 GitHub 登录以管理任务",
+    create_title: "创建新任务",
+    task_title: "标题",
+    priority: "优先级",
+    skill: "指派技能",
+    instructions: "执行指令",
+    cancel: "取消",
+    create: "创建任务",
+    creating: "创建中...",
+    no_tasks: "未找到任务。创建一个来开始吧！",
+    connected_to: "已连接至",
+    tabs: {
       tasks: "任务列表",
       agents: "智能体配置",
       skills: "技能库",
+      telegram: "TG 通知",
       sub: {
         all: "全部",
         open: "待处理",
@@ -69,20 +111,19 @@ export const translations = {
         done: "已完成"
       }
     },
-    agents: {
-      title: "智能体身份配置",
-      add: "添加智能体",
-      name: "智能体名称",
-      role: "角色身份",
-      tg_token: "TG Bot Token (可选)",
-      save: "保存配置",
-    },
-    skills: {
-      title: "可用技能",
-      install: "通过 CLI 安装",
-      copy: "复制命令",
+    telegram: {
+      title: "Telegram 控制中心",
+      bot_token: "机器人 Token",
+      channel_id: "频道 ID",
+      status: "连接状态",
+      test: "发送测试消息",
+      guide: "配置指南",
+      step1: "1. 通过 @BotFather 创建机器人",
+      step2: "2. 创建频道并关联群组",
+      step3: "3. 将机器人设为频道管理员",
     }
   },
 };
+
 
 export type Locale = keyof typeof translations;

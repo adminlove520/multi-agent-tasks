@@ -2,12 +2,12 @@
 
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useEffect, useState, useMemo } from "react";
-import { Plus, CheckCircle2, Circle, Clock, Loader2, Globe, Settings, Terminal, ListTodo, Copy, Check, Filter } from "lucide-react";
+import { Plus, CheckCircle2, Circle, Clock, Loader2, Globe, Settings, Terminal, ListTodo, Copy, Check, Filter, Send, MessageSquare } from "lucide-react";
 import { translations, Locale } from "@/lib/i18n";
 
 export default function Home() {
   const { data: session, status } = useSession();
-  const [activeTab, setActiveTab] = useState<"tasks" | "agents" | "skills">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "agents" | "skills" | "telegram">("tasks");
   const [taskFilter, setTaskFilter] = useState<"all" | "open" | "processing" | "done">("all");
   const [tasks, setTasks] = useState<any[]>([]);
   const [availableSkills, setAvailableSkills] = useState<string[]>([]);
@@ -16,6 +16,7 @@ export default function Home() {
   const [formData, setFormData] = useState({ title: "", body: "", priority: "P1", skill: "" });
   const [locale, setLocale] = useState<Locale>("zh");
   const [copied, setCopied] = useState<string | null>(null);
+  const [tgConfig, setTgConfig] = useState({ botToken: "", chatId: "" });
   
   const t = translations[locale];
 
@@ -35,8 +36,7 @@ export default function Home() {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
         setAvailableSkills(data);
-        // Set default skill to the first one available
-        setFormData(prev => ({ ...prev, skill: data[0] }));
+        setFormData(prev => ({ ...prev, skill: prev.skill || data[0] }));
       }
     } catch (err) { console.error(err); }
   };
@@ -141,7 +141,8 @@ export default function Home() {
           {[
             { id: "tasks", icon: ListTodo, label: t.tabs.tasks },
             { id: "agents", icon: Settings, label: t.tabs.agents },
-            { id: "skills", icon: Terminal, label: t.tabs.skills }
+            { id: "skills", icon: Terminal, label: t.tabs.skills },
+            { id: "telegram", icon: MessageSquare, label: t.tabs.telegram }
           ].map(tab => (
             <button
               key={tab.id}
@@ -283,12 +284,6 @@ export default function Home() {
                         </div>
                         <div className="text-right flex flex-col items-end gap-2">
                           <span className="text-[11px] font-bold text-gray-400 flex items-center gap-1"><Clock className="h-3 w-3" /> {new Date(task.created_at).toLocaleDateString()}</span>
-                          {task.assignee && (
-                            <div className="flex items-center gap-2 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">
-                              <span className="text-[10px] font-bold text-gray-500">{task.assignee.login}</span>
-                              <img src={task.assignee.avatar_url} className="h-5 w-5 rounded-full" alt="" />
-                            </div>
-                          )}
                         </div>
                         <a href={task.html_url} target="_blank" className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-100 rounded transition-all">
                           <Globe className="h-4 w-4 text-gray-400" />
@@ -301,11 +296,75 @@ export default function Home() {
             </section>
           )}
 
+          {activeTab === "telegram" && (
+            <section className="space-y-6">
+              <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-blue-600 p-2 rounded-xl text-white">
+                    <Send className="h-6 w-6" />
+                  </div>
+                  <h2 className="text-xl font-bold">{t.telegram.title}</h2>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                  <div className="md:col-span-2 space-y-6">
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-700">{t.telegram.bot_token}</label>
+                      <input 
+                        type="password" 
+                        placeholder="123456:ABC-DEF..." 
+                        className="w-full rounded-xl border border-gray-200 p-3 bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500"
+                        value={tgConfig.botToken}
+                        onChange={(e) => setTgConfig({ ...tgConfig, botToken: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-700">{t.telegram.channel_id}</label>
+                      <input 
+                        type="text" 
+                        placeholder="-100123456789" 
+                        className="w-full rounded-xl border border-gray-200 p-3 bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500"
+                        value={tgConfig.chatId}
+                        onChange={(e) => setTgConfig({ ...tgConfig, chatId: e.target.value })}
+                      />
+                    </div>
+                    <div className="flex gap-4">
+                      <button className="flex-1 bg-gray-900 text-white font-bold py-3 rounded-xl hover:bg-black transition-all">
+                        {t.agents.save}
+                      </button>
+                      <button className="px-6 py-3 border border-gray-200 rounded-xl font-bold hover:bg-gray-50 transition-all">
+                        {t.telegram.test}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50 rounded-2xl p-6 border border-blue-100">
+                    <h3 className="font-bold text-blue-900 mb-4">{t.telegram.guide}</h3>
+                    <ul className="space-y-4 text-sm text-blue-800">
+                      <li className="flex gap-2">
+                        <span className="font-black">1.</span>
+                        <span>{t.telegram.step1}</span>
+                      </li>
+                      <li className="flex gap-2">
+                        <span className="font-black">2.</span>
+                        <span>{t.telegram.step2}</span>
+                      </li>
+                      <li className="flex gap-2">
+                        <span className="font-black">3.</span>
+                        <span>{t.telegram.step3}</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
           {activeTab === "agents" && (
             <section className="space-y-6">
               <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
                 <h2 className="text-xl font-bold mb-2">{t.agents.title}</h2>
-                <p className="text-sm text-gray-500 mb-8 font-medium">此配置将存储于仓库的 <code className="bg-gray-100 px-1 rounded">agents.json</code> 中，供 Agent 启动时自动读取。</p>
+                <p className="text-sm text-gray-500 mb-8 font-medium">此配置将存储于仓库的 <code className="bg-gray-100 px-1 rounded">agents.json</code> 中。</p>
                 <form className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
@@ -320,10 +379,6 @@ export default function Home() {
                         <option value="collector">汇总者 (Collector)</option>
                       </select>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-700">{t.agents.tg_token}</label>
-                    <input type="password" placeholder="123456:ABC-DEF..." className="w-full rounded-xl border border-gray-200 p-3 bg-gray-50 outline-none" />
                   </div>
                   <button disabled className="px-8 py-3 rounded-xl bg-gray-900 text-white font-bold opacity-50 cursor-not-allowed transition-all">
                     {t.agents.save} (Coming Soon)
@@ -361,14 +416,6 @@ export default function Home() {
                         curl -sSL https://{typeof window !== 'undefined' ? window.location.host : '...'}/install.sh | bash -s -- ${skill}
                       </code>
                     </div>
-                    
-                    <a 
-                      href={`/api/skills?name=${skill}`} 
-                      target="_blank"
-                      className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all"
-                    >
-                      <Globe className="h-4 w-4" /> View SKILL.md
-                    </a>
                   </div>
                 </div>
               ))}
