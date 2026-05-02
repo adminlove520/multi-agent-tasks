@@ -47,4 +47,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           chmod +x .github/scripts/discussion_helper.sh
+          # 增加容错逻辑，如果 Announcements 不存在，会退而求其次
           ./.github/scripts/discussion_helper.sh post "Announcements" "$REPORT_TITLE" "$REPORT_BODY"

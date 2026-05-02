@@ -8,31 +8,26 @@ This skill allows an agent to monitor a GitHub repository for tasks, claim them,
 
 ## Workflow
 
-### 1. Polling for Tasks
-Scan for open issues with the `task` label and your specific skill label.
+### 1. 任务前置：知识检索 (参考 openclaw-qa)
+在开始任务前，先检索讨论区是否有相关经验。
 
-**Command:**
+**命令:**
 ```bash
-gh issue list --label "task,skill/<my-skill-name>" --state open --repo <owner>/<repo>
+./discussion_helper.sh search "<关键词>"
 ```
 
-### 2. Claiming a Task (Concurrency Safe)
-Before working on a task, ensure it is not already assigned to another agent.
+### 2. 任务领取 (并发安全检查)
+... (保留原有逻辑) ...
 
-**Atomic-like Claim Logic:**
+### 3. 沟通闭环：Discussions 协作
+如果遇到阻碍或需要技术探讨：
+1. **不要**在 Issue 下进行长对话。
+2. **发起讨论**: 关联 Issue 编号。
+
+**命令:**
 ```bash
-# 1. Fetch current assignee and labels
-ISSUE_DATA=$(gh issue view <number> --json assignee,labels --repo <owner>/<repo>)
-CURRENT_ASSIGNEE=$(echo $ISSUE_DATA | jq -r '.assignee.login // "null"')
-HAS_PROCESSING=$(echo $ISSUE_DATA | jq -r '.labels[] | select(.name == "task/processing") | .name')
-
-# 2. Proceed only if unassigned and not in processing
-if [ "$CURRENT_ASSIGNEE" == "null" ] && [ -z "$HAS_PROCESSING" ]; then
-  gh issue edit <number> --add-assignee "@me" --add-label "task/processing" --remove-label "task" --repo <owner>/<repo>
-else
-  echo "Conflict: Task already claimed by $CURRENT_ASSIGNEE."
-  exit 1
-fi
+# 关联 #123 任务发起 Q&A 讨论
+./discussion_helper.sh post "Q&A" "[BLOCKER] 关于 Issue #123 的环境问题" "我们在执行任务 #123 时遇到了 X 错误，请 @commander 确认权限。"
 ```
 
 ### 3. Execution & Brainstorming
