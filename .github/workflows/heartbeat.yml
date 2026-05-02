@@ -5,15 +5,59 @@ on:
     - cron: '*/30 * * * *' # Every 30 minutes
   workflow_dispatch:
 
+permissions:
+  discussions: write
+  issues: read
+  contents: read
+
 jobs:
   check-heartbeat:
     runs-on: ubuntu-latest
     steps:
-      - name: Check Agent Activity
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Detect Inactive Agents
+        id: detector
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Fetch recent comments from agents to verify they are alive
-          # If no activity for 2 hours, post an alert to Discussions
-          echo "Scanning for inactive agents..."
-          # Implementation logic would go here
+          echo "Scanning for tasks in processing with no recent updates..."
+          
+          # 获取所有正在处理的任务
+          TASKS=$(gh issue list --label "task/processing" --state open --json number,title,updatedAt --jq '.[]')
+          
+          ALERT_BODY=""
+          NOW=$(date +%s)
+          THRESHOLD=7200 # 2 hours in seconds
+          
+          while read -r task; do
+            if [ -z "$task" ]; then continue; fi
+            
+            UPDATED_AT=$(echo "$task" | jq -r '.updatedAt')
+            UPDATED_SEC=$(date -d "$UPDATED_AT" +%s)
+            DIFF=$((NOW - UPDATED_SEC))
+            
+            if [ $DIFF -gt $THRESHOLD ]; then
+              NUMBER=$(echo "$task" | jq -r '.number')
+              TITLE=$(echo "$task" | jq -r '.title')
+              ALERT_BODY="${ALERT_BODY}- ⚠️ **[TASK #$NUMBER] $TITLE** has had no activity for over 2 hours.\n"
+            fi
+          done <<< "$TASKS"
+          
+          if [ ! -z "$ALERT_BODY" ]; then
+            echo "INACTIVE_ALERT=true" >> $GITHUB_ENV
+            echo "ALERT_CONTENT<<EOF" >> $GITHUB_ENV
+            echo -e "### 🚨 Agent Inactivity Warning\n\nThe following tasks appear to be stalled:\n\n$ALERT_BODY\n\n@adminlove520 Please check the status of these agents." >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+          else
+            echo "INACTIVE_ALERT=false" >> $GITHUB_ENV
+          fi
+
+      - name: Post Alert to Discussions
+        if: env.INACTIVE_ALERT == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          chmod +x .github/scripts/discussion_helper.sh
+          ./.github/scripts/discussion_helper.sh post "Agent Brainstorming" "🚨 System Alert: Inactive Agents Detected" "$ALERT_CONTENT"
