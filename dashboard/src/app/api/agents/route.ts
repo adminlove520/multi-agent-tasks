@@ -52,7 +52,12 @@ export async function POST(req: Request) {
     const agentsToSave = await Promise.all(agents.map(async (agent: any) => {
       if (agent.tgToken && agent.tgToken !== "********") {
         const encryptedValue = await encryptSecret(publicKey.key, agent.tgToken);
-        const secretName = `AGENT_${agent.name.toUpperCase().replace(/\s+/g, '_')}_TOKEN`;
+        // 增强命名规范：只允许大写字母、数字和下划线，非 ASCII 字符转换为拼音或 ID
+        let safeName = agent.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+        if (!safeName || safeName.startsWith('_')) {
+          safeName = `ID_${agent.id}`;
+        }
+        const secretName = `AGENT_${safeName}_TOKEN`;
 
         await octokit.rest.actions.createOrUpdateRepoSecret({
           owner,
