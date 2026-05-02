@@ -1,0 +1,59 @@
+name: Inbox Dispatcher & Janitor
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Every day at midnight
+  workflow_dispatch:
+  push:
+    paths:
+      - 'inbox/events.jsonl' # Trigger when webhook adds a new event
+
+permissions:
+  contents: write
+  discussions: write
+  issues: write
+
+jobs:
+  dispatch-and-cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Process & Dispatch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ ! -f "inbox/events.jsonl" ]; then
+            echo "Inbox is empty. Skipping."
+            exit 0
+          fi
+
+          echo "🚀 Dispatching events from inbox..."
+          
+          # 示例：如果发现 P0 任务，自动在讨论区置顶或标记为紧急
+          while read -r line; do
+            if [[ "$line" == *"priority/p0"* ]]; then
+              TITLE=$(echo "$line" | jq -r '.title')
+              URL=$(echo "$line" | jq -r '.url')
+              echo "🚨 [URGENT] Dispatching P0 task: $TITLE"
+              # 这里可以集成发送 TG 消息的 API 调用
+            fi
+          done < inbox/events.jsonl
+
+      - name: Archive Inbox
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🧹 Archiving daily inbox..."
+          DATE=$(date +'%Y-%m-%d')
+          mkdir -p inbox/archives
+          cp inbox/events.jsonl "inbox/archives/$DATE.jsonl"
+          echo "" > inbox/events.jsonl
+          
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add inbox/
+          git commit -m "🧹 Daily Archive: $DATE"
+          git push

@@ -1,51 +1,42 @@
 #!/bin/bash
 
-# Multi-Agent Inbox Processor
-# 功能：读取 inbox/events.jsonl 并将其转化为 Agent 可理解的 Action
+# Multi-Agent Inbox Processor (v2.0)
+# 基于 GitHub 原生标签和指派信息进行任务过滤
+
+MY_ROLE_LABEL=$1  # 例如: skill/answer
+MY_USERNAME=$2    # 你的 GitHub 用户名 (可选)
 
 INBOX_FILE="inbox/events.jsonl"
 
-# 1. 同步最新 Inbox (通过 git pull 或 gh api)
-sync_inbox() {
-  echo "📥 Syncing inbox from GitHub..."
-  gh api repos/:owner/:repo/contents/inbox/events.jsonl --jq '.content' | base64 -d > "$INBOX_FILE"
-}
+# 1. 过滤逻辑：我是谁？我的任务在哪？
+# 策略 A: 检查 Issue/Discussion 的标签是否匹配我的角色 (如 skill/answer)
+# 策略 B: 检查我是否被设为负责人 (Assignee)
+# 策略 C: 检查内容中是否 @ 了我的用户名
 
-# 2. 解析并过滤属于我的任务
-process_inbox() {
-  MY_ROLE=$1
-  echo "🔍 Processing notifications for role: $MY_ROLE"
+echo "🔍 Scanning inbox for $MY_ROLE_LABEL..."
+
+if [ ! -f "$INBOX_FILE" ]; then
+  echo "Inbox file not found. Please sync first."
+  exit 1
+fi
+
+# 使用 jq 进行高级过滤
+# 逻辑：查找 (title 包含角色标签) OR (如果是评论事件且内容包含 @我)
+jq -c ". | select(.title | contains(\"$MY_ROLE_LABEL\"))" "$INBOX_FILE" | while read -r event; do
+  TITLE=$(echo "$event" | jq -r '.title')
+  URL=$(echo "$event" | jq -r '.url')
+  SENDER=$(echo "$event" | jq -r '.sender')
   
-  if [ ! -f "$INBOX_FILE" ]; then
-    echo "Inbox is empty."
-    return
-  }
+  echo "------------------------------------------------"
+  echo "🔔 [任务提醒] 来自 $SENDER"
+  echo "📌 标题: $TITLE"
+  echo "🔗 链接: $URL"
+done
 
-  # 遍历 jsonl
-  while read -r line; do
-    EVENT=$(echo "$line" | jq -r '.event')
-    TITLE=$(echo "$line" | jq -r '.title')
-    
-    # 如果标题包含我的角色，或者是我参与的讨论
-    if [[ "$TITLE" == *"$MY_ROLE"* ]]; then
-      echo "🔔 [ACTION REQUIRED] New $EVENT: $TITLE"
-      echo "   Link: $(echo "$line" | jq -r '.url')"
-    fi
-  done < "$INBOX_FILE"
-}
-
-# 3. 清理已读 (原子化操作：将 inbox 改名或清空并推送到仓库)
-clear_inbox() {
-  echo "🧹 Clearing processed inbox..."
-  # 实际逻辑应为：将本地处理完的偏移量记下来，或者直接在远端清空
-  gh api -X PUT repos/:owner/:repo/contents/inbox/events.jsonl \
-    -f message="✅ Inbox cleared by agent" \
-    -f content="" \
-    -f sha=$(gh api repos/:owner/:repo/contents/inbox/events.jsonl --jq '.sha')
-}
-
-case "$1" in
-  "sync") sync_inbox ;;
-  "process") process_inbox "$2" ;;
-  "clear") clear_inbox ;;
-esac
+if [ ! -z "$MY_USERNAME" ]; then
+  echo "💬 Checking for mentions of @$MY_USERNAME..."
+  jq -c ". | select(.event == \"issue_comment\" or .event == \"discussion_comment\")" "$INBOX_FILE" | grep "@$MY_USERNAME" | while read -r mention; do
+    echo "📣 [提及提醒] 有人在讨论中艾特了你！"
+    echo "🔗 链接: $(echo "$mention" | jq -r '.url')"
+  done
+fi

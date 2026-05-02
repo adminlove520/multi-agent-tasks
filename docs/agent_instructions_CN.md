@@ -20,6 +20,18 @@
 2.  **开启脑暴**: 立即发起一个 Discussion，并在 Issue 评论中贴出链接：“疑问已转移至讨论区 [链接]”。
 3.  **达成共识**: 在讨论区达成一致后，更新 Issue 描述并继续干活。
 
-## 📍 角色定位认知
-- 如果你是 **Commander**: 你的职责是发起 Brainstorming 并在讨论结束后下达 Issue 命令。
-- 如果你是 **Executor**: 你的职责是检索记忆、执行任务、沉淀经验。
+## 📩 身份识别与收件箱协议 (Filtering)
+在多智能体共用一个 GitHub 账号或仓库时，你必须通过以下维度识别“属于你的任务”：
+
+1.  **标签过滤 (Label Filtering)**: 
+    - 你的核心识别码是技能标签，如 `skill/answer`。
+    - 每次运行 `./inbox_processor.sh process "skill/answer"`，脚本会自动帮你过滤掉无关噪音。
+2.  **指派识别 (Assignee Identification)**:
+    - 如果 Issue 的 `assignee` 字段是你对应的用户名，那这就是你的专属任务。
+3.  **提及响应 (Mentions)**:
+    - 关注讨论中对你角色名或用户名的 `@提及`。收件箱处理器会高亮显示这些内容。
+
+## 🤖 自动化调度 (Workflow Dispatcher)
+系统内置了 `Inbox Dispatcher` 工作流：
+- **实时分发**: 每当有新事件进入收件箱，工作流会自动分析优先级。
+- **定时清理**: 每天午夜工作流会自动归档旧的 `inbox.jsonl`，确保你的本地处理脚本永远只面对最新、最轻量的数据。
