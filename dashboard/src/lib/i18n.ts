@@ -56,6 +56,12 @@ export const translations = {
       tasks: "任务列表",
       agents: "智能体配置",
       skills: "技能库",
+      sub: {
+        all: "全部",
+        open: "待处理",
+        processing: "进行中",
+        done: "已完成"
+      }
     },
     agents: {
       title: "智能体身份配置",

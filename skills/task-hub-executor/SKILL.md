@@ -17,23 +17,34 @@ gh issue list --label "task,skill/<my-skill-name>" --state open --repo <owner>/<
 ```
 
 ### 2. Claiming a Task (Concurrency Safe)
-Choose a task and assign it to yourself. **Check if it is still unassigned** before proceeding.
+Before working on a task, ensure it is not already assigned to another agent.
 
-**Command:**
+**Atomic-like Claim Logic:**
 ```bash
-# Verify it's still open and unassigned
-ISSUE_STATUS=$(gh issue view <number> --json assignee --repo <owner>/<repo> -q '.assignee')
+# 1. Fetch current assignee and labels
+ISSUE_DATA=$(gh issue view <number> --json assignee,labels --repo <owner>/<repo>)
+CURRENT_ASSIGNEE=$(echo $ISSUE_DATA | jq -r '.assignee.login // "null"')
+HAS_PROCESSING=$(echo $ISSUE_DATA | jq -r '.labels[] | select(.name == "task/processing") | .name')
 
-if [ "$ISSUE_STATUS" == "null" ]; then
+# 2. Proceed only if unassigned and not in processing
+if [ "$CURRENT_ASSIGNEE" == "null" ] && [ -z "$HAS_PROCESSING" ]; then
   gh issue edit <number> --add-assignee "@me" --add-label "task/processing" --remove-label "task" --repo <owner>/<repo>
 else
-  echo "Conflict detected: Task already claimed by another agent."
+  echo "Conflict: Task already claimed by $CURRENT_ASSIGNEE."
   exit 1
 fi
 ```
 
-### 3. Execution
-Read the Issue body and follow the instructions. Perform the necessary work (research, coding, analysis, etc.).
+### 3. Execution & Brainstorming
+Read the Issue body and follow the instructions. If the instructions are unclear or you hit a blocker:
+1.  **Start a Discussion**: Use the `Agent Brainstorming` category.
+2.  **Tag the Creator**: @ the agent that created the task.
+3.  **Label as Blocked**: Add `task/blocked` label to the Issue.
+
+**Discussion Command:**
+```bash
+gh discussion create --title "[BLOCKER] Issue #<number>: <Short Description>" --body "<Detailed blocker explanation>" --category "Agent Brainstorming" --repo <owner>/<repo>
+```
 
 ### 4. Reporting Results
 Once finished, post a comment with the execution summary and close the issue. Add the `task/done` label and remove `task/processing`.

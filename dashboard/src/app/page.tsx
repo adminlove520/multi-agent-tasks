@@ -1,18 +1,19 @@
 "use client";
 
 import { useSession, signIn, signOut } from "next-auth/react";
-import { useEffect, useState } from "react";
-import { Plus, CheckCircle2, Circle, Clock, Loader2, Globe, Settings, Terminal, ListTodo, Copy, Check } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
+import { Plus, CheckCircle2, Circle, Clock, Loader2, Globe, Settings, Terminal, ListTodo, Copy, Check, Filter } from "lucide-react";
 import { translations, Locale } from "@/lib/i18n";
 
 export default function Home() {
   const { data: session, status } = useSession();
   const [activeTab, setActiveTab] = useState<"tasks" | "agents" | "skills">("tasks");
+  const [taskFilter, setTaskFilter] = useState<"all" | "open" | "processing" | "done">("all");
   const [tasks, setTasks] = useState<any[]>([]);
   const [availableSkills, setAvailableSkills] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [formData, setFormData] = useState({ title: "", body: "", priority: "P1", skill: "answer" });
+  const [formData, setFormData] = useState({ title: "", body: "", priority: "P1", skill: "general" });
   const [locale, setLocale] = useState<Locale>("zh");
   const [copied, setCopied] = useState<string | null>(null);
   
@@ -43,6 +44,17 @@ export default function Home() {
     }
   }, [session]);
 
+  const filteredTasks = useMemo(() => {
+    return tasks.filter(task => {
+      if (taskFilter === "all") return true;
+      const labels = task.labels.map((l: any) => l.name);
+      if (taskFilter === "open") return labels.includes("task") && task.state === "open";
+      if (taskFilter === "processing") return labels.includes("task/processing");
+      if (taskFilter === "done") return labels.includes("task/done");
+      return true;
+    });
+  }, [tasks, taskFilter]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -54,7 +66,7 @@ export default function Home() {
       });
       if (res.ok) {
         setIsCreating(false);
-        setFormData({ title: "", body: "", priority: "P1", skill: "answer" });
+        setFormData({ title: "", body: "", priority: "P1", skill: "general" });
         fetchTasks();
       }
     } catch (err) { console.error(err); }
@@ -77,233 +89,287 @@ export default function Home() {
 
   if (!session) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4">
-        <h1 className="text-3xl font-bold">{t.welcome}</h1>
-        <p className="text-gray-600">{t.please_sign_in}</p>
+      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-gray-50">
+        <div className="text-center">
+          <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">{t.welcome}</h1>
+          <p className="mt-2 text-lg text-gray-600">{t.please_sign_in}</p>
+        </div>
         <button
           onClick={() => signIn("github")}
-          className="rounded-md bg-black px-6 py-2 text-white hover:bg-gray-800 transition-colors"
+          className="mt-4 flex items-center gap-3 rounded-xl bg-gray-900 px-8 py-4 text-lg font-bold text-white hover:bg-black transition-all shadow-xl hover:scale-105"
         >
-          {t.sign_in}
+          <Copy className="h-6 w-6" /> {t.sign_in}
         </button>
       </div>
     );
   }
 
   return (
-    <main className="container mx-auto max-w-4xl p-6">
-      <header className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
-          <p className="text-sm text-gray-500">
-            {t.connected_to} {process.env.NEXT_PUBLIC_REPO_OWNER || (session.user as any)?.name}/{process.env.NEXT_PUBLIC_REPO_NAME || "multi-agent-tasks"}
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setLocale(locale === "en" ? "zh" : "en")}
-            className="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-gray-900"
-          >
-            <Globe className="h-4 w-4" /> {locale === "en" ? "中文" : "English"}
-          </button>
-          <button
-            onClick={() => signOut()}
-            className="text-sm font-medium text-gray-600 hover:text-gray-900"
-          >
-            {t.sign_out}
-          </button>
-        </div>
-      </header>
-
-      {/* Tabs */}
-      <nav className="mb-8 flex border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab("tasks")}
-          className={`flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors ${activeTab === "tasks" ? "border-b-2 border-blue-500 text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
-        >
-          <ListTodo className="h-4 w-4" /> {t.tabs.tasks}
-        </button>
-        <button
-          onClick={() => setActiveTab("agents")}
-          className={`flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors ${activeTab === "agents" ? "border-b-2 border-blue-500 text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
-        >
-          <Settings className="h-4 w-4" /> {t.tabs.agents}
-        </button>
-        <button
-          onClick={() => setActiveTab("skills")}
-          className={`flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors ${activeTab === "skills" ? "border-b-2 border-blue-500 text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
-        >
-          <Terminal className="h-4 w-4" /> {t.tabs.skills}
-        </button>
-      </nav>
-
-      {/* Tasks Tab */}
-      {activeTab === "tasks" && (
-        <section>
-          <div className="mb-6 flex justify-end">
-            <button
-              onClick={() => setIsCreating(true)}
-              className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              <Plus className="h-4 w-4" /> {t.new_task}
-            </button>
-          </div>
-
-          {isCreating && (
-            <div className="mb-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-              <h2 className="mb-4 text-lg font-semibold">{t.create_title}</h2>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">{t.task_title}</label>
-                  <input
-                    type="text" required
-                    className="mt-1 block w-full rounded-md border border-gray-300 p-2"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">{t.priority}</label>
-                    <select
-                      className="mt-1 block w-full rounded-md border border-gray-300 p-2"
-                      value={formData.priority}
-                      onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                    >
-                      <option value="P0">P0 (Critical)</option>
-                      <option value="P1">P1 (High)</option>
-                      <option value="P2">P2 (Normal)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">{t.skill}</label>
-                    <select
-                      className="mt-1 block w-full rounded-md border border-gray-300 p-2"
-                      value={formData.skill}
-                      onChange={(e) => setFormData({ ...formData, skill: e.target.value })}
-                    >
-                      {availableSkills.map(s => <option key={s} value={s}>{s}</option>)}
-                      {!availableSkills.includes("answer") && <option value="answer">Answer</option>}
-                      {!availableSkills.includes("taizi") && <option value="taizi">Taizi</option>}
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">{t.instructions}</label>
-                  <textarea
-                    required rows={4}
-                    className="mt-1 block w-full rounded-md border border-gray-300 p-2"
-                    value={formData.body}
-                    onChange={(e) => setFormData({ ...formData, body: e.target.value })}
-                  ></textarea>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <button type="button" onClick={() => setIsCreating(false)} className="rounded-md border border-gray-300 px-4 py-2 text-sm">{t.cancel}</button>
-                  <button type="submit" disabled={loading} className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50">
-                    {loading ? t.creating : t.create}
-                  </button>
-                </div>
-              </form>
+    <main className="min-h-screen bg-gray-50 pb-20">
+      <div className="bg-white border-b border-gray-200">
+        <div className="container mx-auto max-w-5xl px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-600 p-2 rounded-lg text-white">
+              <ListTodo className="h-6 w-6" />
             </div>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900 leading-tight">{t.title}</h1>
+              <p className="text-xs text-gray-500">
+                {t.connected_to} <span className="font-mono bg-gray-100 px-1 rounded">{process.env.NEXT_PUBLIC_REPO_OWNER || (session.user as any)?.name}/{process.env.NEXT_PUBLIC_REPO_NAME || "multi-agent-tasks"}</span>
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setLocale(locale === "en" ? "zh" : "en")}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50"
+            >
+              <Globe className="h-4 w-4" /> {locale === "en" ? "中文" : "English"}
+            </button>
+            <div className="h-8 w-px bg-gray-200"></div>
+            <button onClick={() => signOut()} className="text-sm font-medium text-red-600 hover:underline">{t.sign_out}</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="container mx-auto max-w-5xl px-6 mt-8">
+        <nav className="flex items-center gap-1 bg-white p-1 rounded-xl border border-gray-200 shadow-sm inline-flex">
+          {[
+            { id: "tasks", icon: ListTodo, label: t.tabs.tasks },
+            { id: "agents", icon: Settings, label: t.tabs.agents },
+            { id: "skills", icon: Terminal, label: t.tabs.skills }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === tab.id ? "bg-blue-50 text-blue-600" : "text-gray-500 hover:bg-gray-50"}`}
+            >
+              <tab.icon className="h-4 w-4" /> {tab.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="mt-8">
+          {activeTab === "tasks" && (
+            <section className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 bg-white p-1 rounded-lg border border-gray-200">
+                  {["all", "open", "processing", "done"].map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setTaskFilter(f as any)}
+                      className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${taskFilter === f ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-50"}`}
+                    >
+                      {t.tabs.sub[f as keyof typeof t.tabs.sub]}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setIsCreating(true)}
+                  className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-blue-700 shadow-lg shadow-blue-200"
+                >
+                  <Plus className="h-4 w-4" /> {t.new_task}
+                </button>
+              </div>
+
+              {isCreating && (
+                <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-xl animate-in fade-in slide-in-from-top-4 duration-300">
+                  <h2 className="text-xl font-bold mb-6">{t.create_title}</h2>
+                  <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-gray-700">{t.task_title}</label>
+                        <input
+                          type="text" required
+                          className="w-full rounded-xl border border-gray-200 p-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all outline-none"
+                          value={formData.title}
+                          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-sm font-bold text-gray-700">{t.priority}</label>
+                          <select
+                            className="w-full rounded-xl border border-gray-200 p-3 bg-gray-50 outline-none"
+                            value={formData.priority}
+                            onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                          >
+                            <option value="P0">P0 (Critical)</option>
+                            <option value="P1">P1 (High)</option>
+                            <option value="P2">P2 (Normal)</option>
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-bold text-gray-700">{t.skill}</label>
+                          <select
+                            className="w-full rounded-xl border border-gray-200 p-3 bg-gray-50 outline-none"
+                            value={formData.skill}
+                            onChange={(e) => setFormData({ ...formData, skill: e.target.value })}
+                          >
+                            {availableSkills.map(s => <option key={s} value={s}>{s}</option>)}
+                            {!availableSkills.includes("answer") && <option value="answer">Answer</option>}
+                            {!availableSkills.includes("taizi") && <option value="taizi">Taizi</option>}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-700">{t.instructions}</label>
+                      <textarea
+                        required rows={5}
+                        className="w-full rounded-xl border border-gray-200 p-4 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all outline-none"
+                        value={formData.body}
+                        onChange={(e) => setFormData({ ...formData, body: e.target.value })}
+                      ></textarea>
+                    </div>
+                    <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                      <button type="button" onClick={() => setIsCreating(false)} className="px-6 py-2.5 rounded-xl border border-gray-200 font-bold hover:bg-gray-50">{t.cancel}</button>
+                      <button type="submit" disabled={loading} className="px-8 py-2.5 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 disabled:opacity-50">
+                        {loading ? t.creating : t.create}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                {loading && !isCreating ? (
+                  <div className="flex justify-center py-20"><Loader2 className="h-10 w-10 animate-spin text-blue-500" /></div>
+                ) : filteredTasks.length === 0 ? (
+                  <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-gray-300">
+                    <Filter className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500 font-medium">{t.no_tasks}</p>
+                  </div>
+                ) : (
+                  filteredTasks.map((task) => {
+                    const isDone = task.labels.some((l: any) => l.name === "task/done");
+                    const isProcessing = task.labels.some((l: any) => l.name === "task/processing");
+                    
+                    return (
+                      <div key={task.id} className="group relative flex items-start justify-between rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:shadow-md hover:border-blue-200 transition-all">
+                        <div className="flex items-start gap-4">
+                          <div className="mt-1">
+                            {isDone ? (
+                              <div className="bg-green-100 p-1.5 rounded-full"><CheckCircle2 className="h-5 w-5 text-green-600" /></div>
+                            ) : isProcessing ? (
+                              <div className="bg-blue-100 p-1.5 rounded-full"><Loader2 className="h-5 w-5 text-blue-600 animate-spin" /></div>
+                            ) : (
+                              <div className="bg-gray-100 p-1.5 rounded-full"><Circle className="h-5 w-5 text-gray-400" /></div>
+                            )}
+                          </div>
+                          <div className="space-y-1">
+                            <h3 className={`font-bold text-gray-900 ${isDone ? "line-through text-gray-400" : ""}`}>{task.title}</h3>
+                            <div className="flex flex-wrap gap-2">
+                              {task.labels.map((label: any) => (
+                                <span key={label.name} className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider border ${
+                                  label.name.includes("p0") ? "bg-red-50 text-red-600 border-red-100" :
+                                  label.name.includes("p1") ? "bg-orange-50 text-orange-600 border-orange-100" :
+                                  label.name.includes("processing") ? "bg-blue-50 text-blue-600 border-blue-100" :
+                                  label.name.includes("done") ? "bg-green-50 text-green-600 border-green-100" :
+                                  "bg-gray-50 text-gray-500 border-gray-100"
+                                }`}>
+                                  {label.name.replace('priority/', '').replace('skill/', '')}
+                                </span>
+                              ))}
+                            </div>
+                            <p className="text-sm text-gray-500 line-clamp-2 pt-1">{task.body}</p>
+                          </div>
+                        </div>
+                        <div className="text-right flex flex-col items-end gap-2">
+                          <span className="text-[11px] font-bold text-gray-400 flex items-center gap-1"><Clock className="h-3 w-3" /> {new Date(task.created_at).toLocaleDateString()}</span>
+                          {task.assignee && (
+                            <div className="flex items-center gap-2 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">
+                              <span className="text-[10px] font-bold text-gray-500">{task.assignee.login}</span>
+                              <img src={task.assignee.avatar_url} className="h-5 w-5 rounded-full" alt="" />
+                            </div>
+                          )}
+                        </div>
+                        <a href={task.html_url} target="_blank" className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-100 rounded transition-all">
+                          <Globe className="h-4 w-4 text-gray-400" />
+                        </a>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </section>
           )}
 
-          <div className="space-y-4">
-            {loading && !isCreating ? (
-              <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>
-            ) : tasks.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">{t.no_tasks}</div>
-            ) : (
-              tasks.map((task) => (
-                <div key={task.id} className="flex items-start justify-between rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:border-blue-300 transition-colors">
-                  <div className="flex items-start gap-3">
-                    {task.state === "open" ? <Circle className="mt-1 h-5 w-5 text-blue-500" /> : <CheckCircle2 className="mt-1 h-5 w-5 text-green-500" />}
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{task.title}</h3>
-                      <div className="mt-1 flex flex-wrap gap-2">
-                        {task.labels.map((label: any) => (
-                          <span key={label.name} className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 border border-gray-200">{label.name}</span>
-                        ))}
-                      </div>
-                      <p className="mt-2 text-sm text-gray-500 line-clamp-2">{task.body}</p>
+          {activeTab === "agents" && (
+            <section className="space-y-6">
+              <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+                <h2 className="text-xl font-bold mb-2">{t.agents.title}</h2>
+                <p className="text-sm text-gray-500 mb-8 font-medium">此配置将存储于仓库的 <code className="bg-gray-100 px-1 rounded">agents.json</code> 中，供 Agent 启动时自动读取。</p>
+                <form className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-700">{t.agents.name}</label>
+                      <input type="text" placeholder="e.g. 小溪" className="w-full rounded-xl border border-gray-200 p-3 bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-700">{t.agents.role}</label>
+                      <select className="w-full rounded-xl border border-gray-200 p-3 bg-gray-50 outline-none">
+                        <option value="commander">指挥官 (Commander)</option>
+                        <option value="executor">执行者 (Executor)</option>
+                        <option value="collector">汇总者 (Collector)</option>
+                      </select>
                     </div>
                   </div>
-                  <div className="text-right flex flex-col items-end gap-1">
-                    <span className="text-xs text-gray-400 flex items-center gap-1"><Clock className="h-3 w-3" /> {new Date(task.created_at).toLocaleDateString()}</span>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700">{t.agents.tg_token}</label>
+                    <input type="password" placeholder="123456:ABC-DEF..." className="w-full rounded-xl border border-gray-200 p-3 bg-gray-50 outline-none" />
+                  </div>
+                  <button disabled className="px-8 py-3 rounded-xl bg-gray-900 text-white font-bold opacity-50 cursor-not-allowed transition-all">
+                    {t.agents.save} (Coming Soon)
+                  </button>
+                </form>
+              </div>
+            </section>
+          )}
+
+          {activeTab === "skills" && (
+            <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {availableSkills.map(skill => (
+                <div key={skill} className="group rounded-2xl border border-gray-200 bg-white p-8 shadow-sm hover:shadow-lg hover:border-blue-200 transition-all flex flex-col">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-blue-50 p-2 rounded-xl">
+                      <Terminal className="h-6 w-6 text-blue-600" />
+                    </div>
+                    <h3 className="text-lg font-black text-gray-900 capitalize tracking-tight">{skill.replace(/-/g, ' ')}</h3>
+                  </div>
+                  
+                  <p className="text-xs text-gray-400 mb-6 font-mono bg-gray-50 p-2 rounded">/skills/{skill}</p>
+                  
+                  <div className="mt-auto space-y-4">
+                    <div className="p-4 bg-gray-900 rounded-xl">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">{t.skills.install}</span>
+                        <button 
+                          onClick={() => copyToClipboard(`curl -sSL https://${window.location.host}/install.sh | bash -s -- ${skill}`, skill)}
+                          className="text-gray-400 hover:text-white p-1 hover:bg-gray-800 rounded transition-all"
+                        >
+                          {copied === skill ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <code className="text-[11px] text-blue-400 break-all block font-mono leading-relaxed">
+                        curl -sSL https://{typeof window !== 'undefined' ? window.location.host : '...'}/install.sh | bash -s -- {skill}
+                      </code>
+                    </div>
+                    
+                    <a 
+                      href={`/api/skills?name=${skill}`} 
+                      target="_blank"
+                      className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all"
+                    >
+                      <Globe className="h-4 w-4" /> View SKILL.md
+                    </a>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* Agents Tab */}
-      {activeTab === "agents" && (
-        <section className="space-y-6">
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-lg font-semibold">{t.agents.title}</h2>
-            <p className="mb-6 text-sm text-gray-500">此配置将存储于仓库的 `agents.json` 中，供 Agent 启动时自动读取。</p>
-            <form className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">{t.agents.name}</label>
-                  <input type="text" placeholder="e.g. 小溪" className="mt-1 block w-full rounded-md border border-gray-300 p-2" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">{t.agents.role}</label>
-                  <select className="mt-1 block w-full rounded-md border border-gray-300 p-2">
-                    <option value="commander">指挥官 (Commander)</option>
-                    <option value="executor">执行者 (Executor)</option>
-                    <option value="collector">汇总者 (Collector)</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">{t.agents.tg_token}</label>
-                <input type="password" placeholder="123456:ABC-DEF..." className="mt-1 block w-full rounded-md border border-gray-300 p-2" />
-              </div>
-              <button disabled className="rounded-md bg-gray-800 px-4 py-2 text-sm text-white opacity-50 cursor-not-allowed">
-                {t.agents.save} (Coming Soon)
-              </button>
-            </form>
-          </div>
-        </section>
-      )}
-
-      {/* Skills Tab */}
-      {activeTab === "skills" && (
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {availableSkills.map(skill => (
-            <div key={skill} className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-              <h3 className="text-lg font-bold text-gray-900 mb-2 capitalize">{skill.replace(/-/g, ' ')}</h3>
-              <p className="text-sm text-gray-500 mb-4 font-mono">/skills/{skill}</p>
-              
-              <div className="mt-4 p-3 bg-gray-900 rounded-md">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs text-gray-400 font-mono">Install via curl</span>
-                  <button 
-                    onClick={() => copyToClipboard(`curl -sSL https://${window.location.host}/install.sh | bash -s -- ${skill}`, skill)}
-                    className="text-gray-400 hover:text-white"
-                  >
-                    {copied === skill ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                  </button>
-                </div>
-                <code className="text-xs text-blue-400 break-all block font-mono">
-                  curl -sSL https://{typeof window !== 'undefined' ? window.location.host : '...'}/install.sh | bash -s -- {skill}
-                </code>
-              </div>
-              
-              <a 
-                href={`/api/skills?name=${skill}`} 
-                target="_blank"
-                className="mt-4 inline-block text-sm text-blue-600 hover:underline"
-              >
-                View SKILL.md Raw
-              </a>
-            </div>
-          ))}
-        </section>
-      )}
+              ))}
+            </section>
+          )}
+        </div>
+      </div>
     </main>
   );
 }
