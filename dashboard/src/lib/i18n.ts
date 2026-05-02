@@ -87,12 +87,24 @@ export const translations = {
       agents: "智能体配置",
       skills: "技能库",
       telegram: "TG 通知",
+      setup: "系统设置",
       sub: {
         all: "全部",
         open: "待处理",
         processing: "进行中",
         done: "已完成"
       }
+    },
+    setup: {
+      title: "系统集成与自动化",
+      webhook_status: "Webhook 状态",
+      webhook_desc: "自动将 GitHub 事件（Issue/讨论）连接到此看板。",
+      auto_setup: "一键配置 Webhook",
+      inbox_link: "打开 GitHub 收件箱",
+      security: "安全状态",
+      secret_active: "Webhook 签名验证：已激活",
+      secret_inactive: "Webhook 签名验证：未激活 (请设置 WEBHOOK_SECRET)",
+      setup_success: "Webhook 配置成功！",
     },
     agents: {
       title: "智能体身份配置",
