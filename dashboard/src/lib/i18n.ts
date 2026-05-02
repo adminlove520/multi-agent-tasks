@@ -20,6 +20,12 @@ export const translations = {
       tasks: "Tasks",
       agents: "Agents",
       skills: "Skills",
+      sub: {
+        all: "All",
+        open: "Todo",
+        processing: "In Progress",
+        done: "Completed"
+      }
     },
     agents: {
       title: "Agent Configuration",
