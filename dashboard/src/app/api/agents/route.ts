@@ -3,16 +3,13 @@ import { authOptions } from "@/lib/auth";
 import { Octokit } from "octokit";
 import { NextResponse } from "next/server";
 import { getRepoInfo } from "@/lib/github";
+import { encryptSecret } from "@/lib/crypto";
 
 const AGENTS_PATH = "agents.json";
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const queryToken = searchParams.get("token");
+export async function GET() {
   const session: any = await getServerSession(authOptions);
-  
-  const token = queryToken || session?.accessToken || process.env.GITHUB_TOKEN;
-  
+  const token = session?.accessToken || process.env.GITHUB_TOKEN;
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const octokit = new Octokit({ auth: token });
@@ -20,15 +17,18 @@ export async function GET(req: Request) {
   try {
     const { owner, repo } = await getRepoInfo(octokit);
     try {
-      const { data }: any = await octokit.rest.repos.getContent({
-        owner,
-        repo,
-        path: AGENTS_PATH,
-      });
+      const { data }: any = await octokit.rest.repos.getContent({ owner, repo, path: AGENTS_PATH });
       const content = Buffer.from(data.content, "base64").toString("utf-8");
-      return NextResponse.json(JSON.parse(content));
+      const config = JSON.parse(content);
+      
+      // 关键：脱敏处理
+      const sanitizedAgents = (config.agents || []).map((agent: any) => ({
+        ...agent,
+        tgToken: agent.tgToken ? "********" : ""
+      }));
+
+      return NextResponse.json({ agents: sanitizedAgents });
     } catch (e) {
-      // Default initial state
       return NextResponse.json({ agents: [] });
     }
   } catch (error: any) {
@@ -45,14 +45,32 @@ export async function POST(req: Request) {
 
   try {
     const { owner, repo } = await getRepoInfo(octokit);
-    let sha: string | undefined = undefined;
 
+    // 1. 处理所有 Agent 的 Token 并存入 Secrets
+    const { data: publicKey } = await octokit.rest.actions.getRepoPublicKey({ owner, repo });
+
+    const agentsToSave = await Promise.all(agents.map(async (agent: any) => {
+      if (agent.tgToken && agent.tgToken !== "********") {
+        const encryptedValue = await encryptSecret(publicKey.key, agent.tgToken);
+        const secretName = `AGENT_${agent.name.toUpperCase().replace(/\s+/g, '_')}_TOKEN`;
+
+        await octokit.rest.actions.createOrUpdateRepoSecret({
+          owner,
+          repo,
+          secret_name: secretName,
+          encrypted_value: encryptedValue,
+          key_id: publicKey.key_id,
+        });
+
+        return { ...agent, tgToken: `SECRET:${secretName}` };
+      }
+      return agent;
+    }));
+
+    // 2. 保存非敏感名册
+    let sha: string | undefined = undefined;
     try {
-      const { data }: any = await octokit.rest.repos.getContent({
-        owner,
-        repo,
-        path: AGENTS_PATH,
-      });
+      const { data }: any = await octokit.rest.repos.getContent({ owner, repo, path: AGENTS_PATH });
       sha = data.sha;
     } catch (e) {}
 
@@ -60,8 +78,8 @@ export async function POST(req: Request) {
       owner,
       repo,
       path: AGENTS_PATH,
-      message: "🤖 Update agent identities and frameworks from dashboard",
-      content: Buffer.from(JSON.stringify({ agents, lastUpdated: new Date().toISOString() }, null, 2)).toString("base64"),
+      message: "🔐 Secure Update: Agent registry (tokens moved to Secrets)",
+      content: Buffer.from(JSON.stringify({ agents: agentsToSave, lastUpdated: new Date().toISOString() }, null, 2)).toString("base64"),
       sha,
     });
 
