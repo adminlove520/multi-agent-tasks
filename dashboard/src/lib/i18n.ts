@@ -21,12 +21,24 @@ export const translations = {
       agents: "Agents",
       skills: "Skills",
       telegram: "Telegram",
+      setup: "System Setup",
       sub: {
         all: "All",
         open: "Todo",
         processing: "In Progress",
         done: "Completed"
       }
+    },
+    setup: {
+      title: "System Integration",
+      webhook_status: "Webhook Status",
+      webhook_desc: "Automatically connect GitHub events to this dashboard.",
+      auto_setup: "One-Click Setup Webhook",
+      inbox_link: "Open GitHub Inbox",
+      security: "Security Status",
+      secret_active: "Webhook Signature Verification: Active",
+      secret_inactive: "Webhook Signature Verification: Inactive (Set WEBHOOK_SECRET)",
+      setup_success: "Webhook configured successfully!",
     },
     agents: {
       title: "Agent Configuration",

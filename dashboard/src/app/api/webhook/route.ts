@@ -4,11 +4,20 @@ import { getRepoInfo } from "@/lib/github";
 import crypto from "crypto";
 
 export async function POST(req: Request) {
-  const payload = await req.json();
+  const body = await req.text();
   const signature = req.headers.get("x-hub-signature-256");
-  
-  // TODO: Verify signature with WEBHOOK_SECRET for production security
+  const secret = process.env.WEBHOOK_SECRET;
 
+  // Verify signature if secret is provided
+  if (secret && signature) {
+    const hmac = crypto.createHmac("sha256", secret);
+    const digest = "sha256=" + hmac.update(body).digest("hex");
+    if (signature !== digest) {
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
+  }
+
+  const payload = JSON.parse(body);
   const event = req.headers.get("x-github-event");
   const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN || process.env.GITHUB_SECRET });
 
