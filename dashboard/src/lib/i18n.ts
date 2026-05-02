@@ -16,6 +16,24 @@ export const translations = {
     creating: "Creating...",
     no_tasks: "No tasks found. Create one to get started!",
     connected_to: "Connected to",
+    tabs: {
+      tasks: "Tasks",
+      agents: "Agents",
+      skills: "Skills",
+    },
+    agents: {
+      title: "Agent Configuration",
+      add: "Add Agent",
+      name: "Agent Name",
+      role: "Role",
+      tg_token: "TG Bot Token (Optional)",
+      save: "Save Config",
+    },
+    skills: {
+      title: "Available Skills",
+      install: "Install via CLI",
+      copy: "Copy Command",
+    }
   },
   zh: {
     title: "任务看板",
@@ -34,6 +52,24 @@ export const translations = {
     creating: "创建中...",
     no_tasks: "未找到任务。创建一个来开始吧！",
     connected_to: "已连接至",
+    tabs: {
+      tasks: "任务列表",
+      agents: "智能体配置",
+      skills: "技能库",
+    },
+    agents: {
+      title: "智能体身份配置",
+      add: "添加智能体",
+      name: "智能体名称",
+      role: "角色身份",
+      tg_token: "TG Bot Token (可选)",
+      save: "保存配置",
+    },
+    skills: {
+      title: "可用技能",
+      install: "通过 CLI 安装",
+      copy: "复制命令",
+    }
   },
 };
 
