@@ -113,11 +113,16 @@ export const translations = {
     },
     agents: {
       title: "智能体身份配置",
+      desc: "此配置存储在 agents.json 中。智能体启动时将读取此文件以确认自身身份与角色。",
       add: "添加智能体",
       name: "智能体名称",
       role: "角色身份",
-      tg_token: "TG Bot Token (可选)",
-      save: "保存配置",
+      framework: "所属架构",
+      tg_token: "TG Token (可选)",
+      save: "保存智能体配置",
+      delete: "移除",
+      saving: "保存中...",
+      save_success: "智能体配置已保存成功！",
     },
     skills: {
       title: "可用技能",
@@ -139,4 +144,3 @@ export const translations = {
 };
 
 export type Locale = keyof typeof translations;
-ranslations;
