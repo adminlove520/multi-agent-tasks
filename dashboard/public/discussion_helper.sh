@@ -55,10 +55,24 @@ search_discussions() {
             title
             url
             body
+            category { name }
           }
         }
       }
     }' -F owner="$2" -F name="$3" -F query="$QUERY"
+}
+
+# 存储记忆 (Store to Shared Brain)
+store_memory() {
+  OWNER=$(echo $GITHUB_REPOSITORY | cut -d'/' -f1)
+  REPO_NAME=$(echo $GITHUB_REPOSITORY | cut -d'/' -f2)
+  REPO_ID=$(get_repo_id "$OWNER" "$REPO_NAME")
+  
+  # 优先寻找 "Show and tell" 或 "General" 作为记忆分区
+  CAT_ID=$(get_category_id "$OWNER" "$REPO_NAME" "Show and tell")
+  [ -z "$CAT_ID" ] && CAT_ID=$(get_category_id "$OWNER" "$REPO_NAME" "General")
+  
+  create_discussion "$REPO_ID" "$CAT_ID" "[MEMO] $1" "$2"
 }
 
 case "$1" in
@@ -66,20 +80,17 @@ case "$1" in
     OWNER=$(echo $GITHUB_REPOSITORY | cut -d'/' -f1)
     REPO_NAME=$(echo $GITHUB_REPOSITORY | cut -d'/' -f2)
     REPO_ID=$(get_repo_id "$OWNER" "$REPO_NAME")
-    
-    # 尝试匹配。如果找不到指定的分类，退而求其次使用 Q&A 或 General
     CAT_ID=$(get_category_id "$OWNER" "$REPO_NAME" "$2")
-    if [ -z "$CAT_ID" ]; then
-      echo "Category '$2' not found. Falling back to 'Q&A' or 'General'..."
-      CAT_ID=$(get_category_id "$OWNER" "$REPO_NAME" "Q&A")
-      [ -z "$CAT_ID" ] && CAT_ID=$(get_category_id "$OWNER" "$REPO_NAME" "General")
-    fi
-    
+    [ -z "$CAT_ID" ] && CAT_ID=$(get_category_id "$OWNER" "$REPO_NAME" "Q&A")
+    [ -z "$CAT_ID" ] && CAT_ID=$(get_category_id "$OWNER" "$REPO_NAME" "General")
     create_discussion "$REPO_ID" "$CAT_ID" "$3" "$4"
     ;;
-  "search")
+  "search"|"recall")
     OWNER=$(echo $GITHUB_REPOSITORY | cut -d'/' -f1)
     REPO_NAME=$(echo $GITHUB_REPOSITORY | cut -d'/' -f2)
     search_discussions "$2" "$OWNER" "$REPO_NAME"
+    ;;
+  "memo")
+    store_memory "$2" "$3"
     ;;
 esac
