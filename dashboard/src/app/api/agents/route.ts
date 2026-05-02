@@ -6,11 +6,16 @@ import { getRepoInfo } from "@/lib/github";
 
 const AGENTS_PATH = "agents.json";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const queryToken = searchParams.get("token");
   const session: any = await getServerSession(authOptions);
-  if (!session?.accessToken) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  
+  const token = queryToken || session?.accessToken || process.env.GITHUB_TOKEN;
+  
+  if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const octokit = new Octokit({ auth: session.accessToken });
+  const octokit = new Octokit({ auth: token });
 
   try {
     const { owner, repo } = await getRepoInfo(octokit);

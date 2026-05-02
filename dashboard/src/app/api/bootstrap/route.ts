@@ -4,12 +4,17 @@ import { Octokit } from "octokit";
 import { NextResponse } from "next/server";
 import { getRepoInfo } from "@/lib/github";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const queryToken = searchParams.get("token");
   const session: any = await getServerSession(authOptions);
-  // Allow public access for bootstrap if needed, but safer with session
-  if (!session?.accessToken) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  
+  // 优先使用 Query Token (Agent 使用), 其次使用 Session (网页预览使用)
+  const token = queryToken || session?.accessToken || process.env.GITHUB_TOKEN;
+  
+  if (!token) return NextResponse.json({ error: "Unauthorized. Please provide a token." }, { status: 401 });
 
-  const octokit = new Octokit({ auth: session.accessToken });
+  const octokit = new Octokit({ auth: token });
 
   try {
     const { owner, repo } = await getRepoInfo(octokit);
