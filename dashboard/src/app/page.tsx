@@ -13,7 +13,7 @@ export default function Home() {
   const [availableSkills, setAvailableSkills] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [formData, setFormData] = useState({ title: "", body: "", priority: "P1", skill: "general" });
+  const [formData, setFormData] = useState({ title: "", body: "", priority: "P1", skill: "" });
   const [locale, setLocale] = useState<Locale>("zh");
   const [copied, setCopied] = useState<string | null>(null);
   
@@ -33,7 +33,11 @@ export default function Home() {
     try {
       const res = await fetch("/api/skills");
       const data = await res.json();
-      if (Array.isArray(data)) setAvailableSkills(data);
+      if (Array.isArray(data) && data.length > 0) {
+        setAvailableSkills(data);
+        // Set default skill to the first one available
+        setFormData(prev => ({ ...prev, skill: data[0] }));
+      }
     } catch (err) { console.error(err); }
   };
 
@@ -66,7 +70,7 @@ export default function Home() {
       });
       if (res.ok) {
         setIsCreating(false);
-        setFormData({ title: "", body: "", priority: "P1", skill: "general" });
+        setFormData({ title: "", body: "", priority: "P1", skill: availableSkills[0] || "" });
         fetchTasks();
       }
     } catch (err) { console.error(err); }
@@ -206,9 +210,11 @@ export default function Home() {
                             value={formData.skill}
                             onChange={(e) => setFormData({ ...formData, skill: e.target.value })}
                           >
-                            {availableSkills.map(s => <option key={s} value={s}>{s}</option>)}
-                            {!availableSkills.includes("answer") && <option value="answer">Answer</option>}
-                            {!availableSkills.includes("taizi") && <option value="taizi">Taizi</option>}
+                            {availableSkills.length > 0 ? (
+                              availableSkills.map(s => <option key={s} value={s}>{s}</option>)
+                            ) : (
+                              <option value="">No skills found</option>
+                            )}
                           </select>
                         </div>
                       </div>
@@ -352,7 +358,7 @@ export default function Home() {
                         </button>
                       </div>
                       <code className="text-[11px] text-blue-400 break-all block font-mono leading-relaxed">
-                        curl -sSL https://{typeof window !== 'undefined' ? window.location.host : '...'}/install.sh | bash -s -- {skill}
+                        curl -sSL https://{typeof window !== 'undefined' ? window.location.host : '...'}/install.sh | bash -s -- ${skill}
                       </code>
                     </div>
                     

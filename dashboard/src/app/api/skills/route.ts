@@ -16,6 +16,7 @@ export async function GET(req: Request) {
 
   try {
     const { owner, repo } = await getRepoInfo(octokit);
+    console.log(`[Skills API] Fetching from ${owner}/${repo}`);
 
     if (!skill) {
       const { data: contents } = await octokit.rest.repos.getContent({
@@ -23,10 +24,13 @@ export async function GET(req: Request) {
         repo,
         path: "skills",
       });
+      
       const items = Array.isArray(contents) ? contents : [contents];
       const folders = items
         .filter((c: any) => c.type === "dir" || c.type === "tree")
         .map((c: any) => c.name);
+      
+      console.log(`[Skills API] Found folders: ${folders.join(", ")}`);
       return NextResponse.json(folders);
     }
 
@@ -44,6 +48,7 @@ export async function GET(req: Request) {
     }
     return NextResponse.json({ content: decoded });
   } catch (error: any) {
+    console.error("[Skills API Error]", error.status, error.message);
     if (error.status === 404) return NextResponse.json([]);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
