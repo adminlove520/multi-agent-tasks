@@ -5,22 +5,22 @@
       "name": "小溪",
       "role": "commander",
       "framework": "openclaw",
-      "tgToken": "8729993434:AAGYAmaYXcrYCuhd5m-WEl1X0E1SJTz4TNQ"
+      "tgToken": "********"
     },
     {
       "id": 1777736058758,
       "name": "Answer",
       "role": "collector",
       "framework": "openclaw",
-      "tgToken": "8773175290:AAGpywK_kol4Wu6ITQagQjsfYcIAANg9uEM"
+      "tgToken": "********"
     },
     {
       "id": 1777736107102,
       "name": "太子",
       "role": "executor",
       "framework": "hermes",
-      "tgToken": "8435768342:AAGnJxUYLKFwKNOQ-me-I_QKACBS9jXAGyA"
+      "tgToken": "********"
     }
   ],
-  "lastUpdated": "2026-05-02T15:35:33.613Z"
+  "lastUpdated": "2026-05-02T15:50:24.241Z"
 }
