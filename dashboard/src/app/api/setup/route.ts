@@ -35,7 +35,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Could not determine base URL." }, { status: 400 });
     }
 
-    const webhookUrl = `${baseUrl}/api/webhook`;
+    const webhookUrl = `${baseUrl}/api/webhook`.trim();
+
+    // 记录一下生成的 URL，方便在响应中查看
+    console.log("Attempting to create webhook with URL:", webhookUrl);
 
     // 2. 获取当前 Webhooks 列表，避免重复
     const { data: hooks } = await octokit.rest.repos.listWebhooks({ owner, repo });
@@ -65,8 +68,12 @@ export async function POST(req: Request) {
       });
       return NextResponse.json({ success: true, id: newHook.id, url: webhookUrl });
     } catch (err: any) {
+      // 包含失败的 URL 在错误信息中，方便用户反馈
+      const githubError = err.response?.data?.message || err.message;
+      const detail = err.response?.data?.errors?.[0]?.message || "";
+      
       return NextResponse.json({ 
-        error: `GitHub API Error: ${err.message}`, 
+        error: `GitHub API Error: ${githubError} ${detail}`, 
         url: webhookUrl,
         owner,
         repo

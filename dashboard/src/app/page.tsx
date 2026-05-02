@@ -435,7 +435,7 @@ export default function Home() {
                             if (res.ok) {
                               alert(t.setup.setup_success);
                             } else {
-                              alert(`Setup Failed: ${data.error || "Unknown error"}`);
+                              alert(`Setup Failed: ${data.error || "Unknown error"}\n\nURL: ${data.url}\nOwner: ${data.owner}\nRepo: ${data.repo}`);
                             }
                           } catch (e: any) { 
                             console.error(e);
