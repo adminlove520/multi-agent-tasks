@@ -7,7 +7,7 @@ import { translations, Locale } from "@/lib/i18n";
 
 export default function Home() {
   const { data: session, status } = useSession();
-  const [activeTab, setActiveTab] = useState<"tasks" | "agents" | "skills" | "telegram">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "agents" | "skills" | "telegram" | "setup">("tasks");
   const [taskFilter, setTaskFilter] = useState<"all" | "open" | "processing" | "done">("all");
   const [tasks, setTasks] = useState<any[]>([]);
   const [availableSkills, setAvailableSkills] = useState<string[]>([]);
@@ -297,6 +297,69 @@ export default function Home() {
             </section>
           )}
 
+          {activeTab === "setup" && (
+            <section className="space-y-6">
+              <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-green-600 p-2 rounded-xl text-white">
+                    <Globe className="h-6 w-6" />
+                  </div>
+                  <h2 className="text-xl font-bold">{t.setup.title}</h2>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-6">
+                    <div className="p-6 rounded-2xl border border-gray-100 bg-gray-50 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-bold text-gray-900">{t.setup.webhook_status}</h3>
+                        <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
+                      </div>
+                      <p className="text-sm text-gray-600">{t.setup.webhook_desc}</p>
+                      <button 
+                        onClick={async () => {
+                          setLoading(true);
+                          try {
+                            const res = await fetch("/api/setup", { method: "POST" });
+                            if (res.ok) alert(t.setup.setup_success);
+                          } catch (e) { console.error(e); }
+                          finally { setLoading(false); }
+                        }}
+                        disabled={loading}
+                        className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
+                      >
+                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                        {t.setup.auto_setup}
+                      </button>
+                    </div>
+
+                    <div className="p-6 rounded-2xl border border-gray-100 bg-gray-50 space-y-4">
+                      <h3 className="font-bold text-gray-900">{t.setup.security}</h3>
+                      <div className={`flex items-center gap-2 text-sm font-medium ${locale === 'en' ? 'text-green-600' : 'text-orange-600'}`}>
+                        <div className={`h-2 w-2 rounded-full bg-green-500`}></div>
+                        {t.setup.secret_active}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div className="p-6 rounded-2xl border border-gray-100 bg-blue-50 space-y-4">
+                      <h3 className="font-bold text-blue-900">GitHub Native Inbox</h3>
+                      <p className="text-sm text-blue-800">Use GitHub's native notification system to monitor agent activities and mentions across all repositories.</p>
+                      <a 
+                        href="https://github.com/notifications" 
+                        target="_blank"
+                        className="w-full bg-white text-blue-600 border border-blue-200 font-bold py-3 rounded-xl hover:bg-blue-100 transition-all flex items-center justify-center gap-2"
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                        {t.setup.inbox_link}
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
           {activeTab === "telegram" && (
             <section className="space-y-6">
               <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
@@ -366,68 +429,6 @@ export default function Home() {
               <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
                 <h2 className="text-xl font-bold mb-2">{t.agents.title}</h2>
                 <p className="text-sm text-gray-500 mb-8 font-medium">此配置将存储于仓库的 <code className="bg-gray-100 px-1 rounded">agents.json</code> 中。</p>
-                <form className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-sm font-bold text-gray-700">{t.agents.name}</label>
-                      <input type="text" placeholder="e.g. 小溪" className="w-full rounded-xl border border-gray-200 p-3 bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-bold text-gray-700">{t.agents.role}</label>
-                      <select className="w-full rounded-xl border border-gray-200 p-3 bg-gray-50 outline-none">
-                        <option value="commander">指挥官 (Commander)</option>
-                        <option value="executor">执行者 (Executor)</option>
-                        <option value="collector">汇总者 (Collector)</option>
-                      </select>
-                    </div>
-                  </div>
-                  <button disabled className="px-8 py-3 rounded-xl bg-gray-900 text-white font-bold opacity-50 cursor-not-allowed transition-all">
-                    {t.agents.save} (Coming Soon)
-                  </button>
-                </form>
-              </div>
-            </section>
-          )}
-
-          {activeTab === "skills" && (
-            <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {availableSkills.map(skill => (
-                <div key={skill} className="group rounded-2xl border border-gray-200 bg-white p-8 shadow-sm hover:shadow-lg hover:border-blue-200 transition-all flex flex-col">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="bg-blue-50 p-2 rounded-xl">
-                      <Terminal className="h-6 w-6 text-blue-600" />
-                    </div>
-                    <h3 className="text-lg font-black text-gray-900 capitalize tracking-tight">{skill.replace(/-/g, ' ')}</h3>
-                  </div>
-                  
-                  <p className="text-xs text-gray-400 mb-6 font-mono bg-gray-50 p-2 rounded">/skills/{skill}</p>
-                  
-                  <div className="mt-auto space-y-4">
-                    <div className="p-4 bg-gray-900 rounded-xl">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">{t.skills.install}</span>
-                        <button 
-                          onClick={() => copyToClipboard(`curl -sSL https://${window.location.host}/install.sh | bash -s -- ${skill}`, skill)}
-                          className="text-gray-400 hover:text-white p-1 hover:bg-gray-800 rounded transition-all"
-                        >
-                          {copied === skill ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                        </button>
-                      </div>
-                      <code className="text-[11px] text-blue-400 break-all block font-mono leading-relaxed">
-                        curl -sSL https://{typeof window !== 'undefined' ? window.location.host : '...'}/install.sh | bash -s -- ${skill}
-                      </code>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </section>
-          )}
-        </div>
-      </div>
-    </main>
-  );
-}
-仓库的 <code className="bg-gray-100 px-1 rounded">agents.json</code> 中。</p>
                 <form className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
