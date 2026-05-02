@@ -6,11 +6,11 @@ import { getRepoInfo } from "@/lib/github";
 
 export async function POST() {
   const session = await getServerSession(authOptions);
-  if (!session || !session.accessToken) {
+  if (!session || !(session as any).accessToken) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const octokit = new Octokit({ auth: session.accessToken });
+  const octokit = new Octokit({ auth: (session as any).accessToken });
 
   try {
     const { owner, repo } = await getRepoInfo(octokit);
