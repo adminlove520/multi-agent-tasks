@@ -2,7 +2,7 @@
 
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useEffect, useState, useMemo } from "react";
-import { Plus, CheckCircle2, Circle, Clock, Loader2, Globe, Settings, Terminal, ListTodo, Copy, Check, Filter, Send, MessageSquare } from "lucide-react";
+import { Plus, CheckCircle2, Circle, Clock, Loader2, Globe, Settings, Terminal, ListTodo, Copy, Check, Filter, Send, MessageSquare, Trash2, ShieldCheck, User } from "lucide-react";
 import { translations, Locale } from "@/lib/i18n";
 
 export default function Home() {
@@ -16,9 +16,16 @@ export default function Home() {
   const [formData, setFormData] = useState({ title: "", body: "", priority: "P1", skill: "" });
   const [locale, setLocale] = useState<Locale>("zh");
   const [copied, setCopied] = useState<string | null>(null);
+  
+  // Telegram State
   const [tgConfig, setTgConfig] = useState({ botToken: "", chatId: "" });
   const [isSavingTg, setIsSavingTg] = useState(false);
   const [isTestingTg, setIsTestingTg] = useState(false);
+
+  // Agents State
+  const [agents, setAgents] = useState<any[]>([]);
+  const [isSavingAgents, setIsSavingAgents] = useState(false);
+  const [isLoadingAgents, setIsLoadingAgents] = useState(false);
   
   const t = translations[locale];
 
@@ -53,11 +60,24 @@ export default function Home() {
     } catch (err) { console.error(err); }
   };
 
+  const fetchAgents = async () => {
+    setIsLoadingAgents(true);
+    try {
+      const res = await fetch("/api/agents");
+      const data = await res.json();
+      if (data && data.agents) {
+        setAgents(data.agents);
+      }
+    } catch (err) { console.error(err); }
+    finally { setIsLoadingAgents(false); }
+  };
+
   useEffect(() => {
     if (session) {
       fetchTasks();
       fetchSkills();
       fetchTgConfig();
+      fetchAgents();
     }
   }, [session]);
 
@@ -131,6 +151,40 @@ export default function Home() {
       alert("Failed to send test message");
     } finally {
       setIsTestingTg(false);
+    }
+  };
+
+  const handleAddAgent = () => {
+    setAgents([...agents, { id: Date.now(), name: "", role: "executor", framework: "openclaw", tgToken: "" }]);
+  };
+
+  const handleRemoveAgent = (id: number) => {
+    setAgents(agents.filter(a => a.id !== id));
+  };
+
+  const handleAgentChange = (id: number, field: string, value: string) => {
+    setAgents(agents.map(a => a.id === id ? { ...a, [field]: value } : a));
+  };
+
+  const handleSaveAgents = async () => {
+    setIsSavingAgents(true);
+    try {
+      const res = await fetch("/api/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agents }),
+      });
+      if (res.ok) {
+        alert(t.agents.save_success);
+      } else {
+        const data = await res.json();
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save agents");
+    } finally {
+      setIsSavingAgents(false);
     }
   };
 
@@ -399,7 +453,7 @@ export default function Home() {
 
                     <div className="p-6 rounded-2xl border border-gray-100 bg-gray-50 space-y-4">
                       <h3 className="font-bold text-gray-900">{t.setup.security}</h3>
-                      <div className={`flex items-center gap-2 text-sm font-medium ${locale === 'en' ? 'text-green-600' : 'text-orange-600'}`}>
+                      <div className={`flex items-center gap-2 text-sm font-medium text-green-600`}>
                         <div className={`h-2 w-2 rounded-full bg-green-500`}></div>
                         {t.setup.secret_active}
                       </div>
@@ -502,27 +556,98 @@ export default function Home() {
           {activeTab === "agents" && (
             <section className="space-y-6">
               <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-                <h2 className="text-xl font-bold mb-2">{t.agents.title}</h2>
-                <p className="text-sm text-gray-500 mb-8 font-medium">此配置将存储于仓库的 <code className="bg-gray-100 px-1 rounded">agents.json</code> 中。</p>
-                <form className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-sm font-bold text-gray-700">{t.agents.name}</label>
-                      <input type="text" placeholder="e.g. 小溪" className="w-full rounded-xl border border-gray-200 p-3 bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-bold text-gray-700">{t.agents.role}</label>
-                      <select className="w-full rounded-xl border border-gray-200 p-3 bg-gray-50 outline-none">
-                        <option value="commander">指挥官 (Commander)</option>
-                        <option value="executor">执行者 (Executor)</option>
-                        <option value="collector">汇总者 (Collector)</option>
-                      </select>
-                    </div>
+                <div className="flex items-center justify-between mb-8">
+                  <div>
+                    <h2 className="text-2xl font-black text-gray-900 tracking-tight">{t.agents.title}</h2>
+                    <p className="text-sm text-gray-500 font-medium mt-1">{t.agents.desc}</p>
                   </div>
-                  <button disabled className="px-8 py-3 rounded-xl bg-gray-900 text-white font-bold opacity-50 cursor-not-allowed transition-all">
-                    {t.agents.save} (Coming Soon)
+                  <button 
+                    onClick={handleAddAgent}
+                    className="flex items-center gap-2 bg-blue-600 text-white font-bold px-6 py-2.5 rounded-xl hover:bg-blue-700 transition-all"
+                  >
+                    <Plus className="h-4 w-4" /> {t.agents.add}
                   </button>
-                </form>
+                </div>
+
+                <div className="space-y-4">
+                  {isLoadingAgents ? (
+                    <div className="flex justify-center py-10"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>
+                  ) : agents.length === 0 ? (
+                    <div className="text-center py-16 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                      <User className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                      <p className="text-gray-400 font-bold">No agents configured yet.</p>
+                    </div>
+                  ) : (
+                    agents.map((agent) => (
+                      <div key={agent.id} className="group relative grid grid-cols-1 md:grid-cols-4 gap-4 p-6 bg-gray-50 rounded-2xl border border-gray-200 hover:border-blue-200 transition-all">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t.agents.name}</label>
+                          <input 
+                            type="text" 
+                            className="w-full bg-white border border-gray-200 rounded-lg p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                            value={agent.name}
+                            onChange={(e) => handleAgentChange(agent.id, "name", e.target.value)}
+                            placeholder="e.g. 小溪"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t.agents.role}</label>
+                          <select 
+                            className="w-full bg-white border border-gray-200 rounded-lg p-2 text-sm font-bold outline-none"
+                            value={agent.role}
+                            onChange={(e) => handleAgentChange(agent.id, "role", e.target.value)}
+                          >
+                            <option value="commander">指挥官 (Commander)</option>
+                            <option value="executor">执行者 (Executor)</option>
+                            <option value="collector">汇总者 (Collector)</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t.agents.framework}</label>
+                          <select 
+                            className="w-full bg-white border border-gray-200 rounded-lg p-2 text-sm font-bold outline-none"
+                            value={agent.framework}
+                            onChange={(e) => handleAgentChange(agent.id, "framework", e.target.value)}
+                          >
+                            <option value="openclaw">OpenClaw Agent</option>
+                            <option value="hermes">Hermes Agent</option>
+                            <option value="other">Other Framework</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1 relative">
+                          <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t.agents.tg_token}</label>
+                          <input 
+                            type="password" 
+                            className="w-full bg-white border border-gray-200 rounded-lg p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+                            value={agent.tgToken}
+                            onChange={(e) => handleAgentChange(agent.id, "tgToken", e.target.value)}
+                            placeholder="Optional secret"
+                          />
+                          <button 
+                            onClick={() => handleRemoveAgent(agent.id)}
+                            className="absolute -top-1 -right-1 p-1.5 bg-white text-red-500 border border-gray-100 rounded-full hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100 shadow-sm"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="mt-10 pt-6 border-t border-gray-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs text-orange-600 font-bold bg-orange-50 px-3 py-1.5 rounded-full">
+                    <ShieldCheck className="h-3.5 w-3.5" /> Sensitive tokens will be masked in UI after saving.
+                  </div>
+                  <button 
+                    onClick={handleSaveAgents}
+                    disabled={isSavingAgents || agents.length === 0}
+                    className="bg-gray-900 text-white font-bold px-10 py-3 rounded-xl hover:bg-black transition-all flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {isSavingAgents ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    {t.agents.save}
+                  </button>
+                </div>
               </div>
             </section>
           )}

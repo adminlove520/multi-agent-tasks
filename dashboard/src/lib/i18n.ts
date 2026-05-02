@@ -41,12 +41,17 @@ export const translations = {
       setup_success: "Webhook configured successfully!",
     },
     agents: {
-      title: "Agent Configuration",
+      title: "Agent Identity Configuration",
+      desc: "This config is stored in agents.json. Agents use this to identify themselves and their roles.",
       add: "Add Agent",
       name: "Agent Name",
       role: "Role",
-      tg_token: "TG Bot Token (Optional)",
-      save: "Save Config",
+      framework: "Framework",
+      tg_token: "TG Token (Optional)",
+      save: "Save Agents",
+      delete: "Remove",
+      saving: "Saving...",
+      save_success: "Agent configuration saved successfully!",
     },
     skills: {
       title: "Available Skills",
@@ -134,3 +139,4 @@ export const translations = {
 };
 
 export type Locale = keyof typeof translations;
+ranslations;
