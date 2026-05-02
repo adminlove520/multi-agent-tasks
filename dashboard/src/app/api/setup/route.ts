@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { getRepoInfo } from "@/lib/github";
 
-export async function POST() {
+export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session || !(session as any).accessToken) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
