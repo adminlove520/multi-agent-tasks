@@ -17,6 +17,8 @@ export default function Home() {
   const [locale, setLocale] = useState<Locale>("zh");
   const [copied, setCopied] = useState<string | null>(null);
   const [tgConfig, setTgConfig] = useState({ botToken: "", chatId: "" });
+  const [isSavingTg, setIsSavingTg] = useState(false);
+  const [isTestingTg, setIsTestingTg] = useState(false);
   
   const t = translations[locale];
 
@@ -41,10 +43,21 @@ export default function Home() {
     } catch (err) { console.error(err); }
   };
 
+  const fetchTgConfig = async () => {
+    try {
+      const res = await fetch("/api/telegram");
+      const data = await res.json();
+      if (data && !data.error) {
+        setTgConfig({ botToken: data.botToken || "", chatId: data.chatId || "" });
+      }
+    } catch (err) { console.error(err); }
+  };
+
   useEffect(() => {
     if (session) {
       fetchTasks();
       fetchSkills();
+      fetchTgConfig();
     }
   }, [session]);
 
@@ -75,6 +88,50 @@ export default function Home() {
       }
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
+  };
+
+  const handleSaveTgConfig = async () => {
+    setIsSavingTg(true);
+    try {
+      const res = await fetch("/api/telegram", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(tgConfig),
+      });
+      if (res.ok) {
+        alert(locale === "en" ? "Telegram configuration saved!" : "Telegram 配置已保存！");
+      } else {
+        const data = await res.json();
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save configuration");
+    } finally {
+      setIsSavingTg(false);
+    }
+  };
+
+  const handleTestTgMessage = async () => {
+    setIsTestingTg(true);
+    try {
+      const res = await fetch("/api/telegram/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(tgConfig),
+      });
+      if (res.ok) {
+        alert(locale === "en" ? "Test message sent!" : "测试消息已发送！");
+      } else {
+        const data = await res.json();
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to send test message");
+    } finally {
+      setIsTestingTg(false);
+    }
   };
 
   const copyToClipboard = (text: string, id: string) => {
@@ -393,10 +450,20 @@ export default function Home() {
                       />
                     </div>
                     <div className="flex gap-4">
-                      <button className="flex-1 bg-gray-900 text-white font-bold py-3 rounded-xl hover:bg-black transition-all">
+                      <button 
+                        onClick={handleSaveTgConfig}
+                        disabled={isSavingTg}
+                        className="flex-1 bg-gray-900 text-white font-bold py-3 rounded-xl hover:bg-black transition-all flex items-center justify-center gap-2"
+                      >
+                        {isSavingTg ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                         {t.agents.save}
                       </button>
-                      <button className="px-6 py-3 border border-gray-200 rounded-xl font-bold hover:bg-gray-50 transition-all">
+                      <button 
+                        onClick={handleTestTgMessage}
+                        disabled={isTestingTg}
+                        className="px-6 py-3 border border-gray-200 rounded-xl font-bold hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
+                      >
+                        {isTestingTg ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                         {t.telegram.test}
                       </button>
                     </div>
