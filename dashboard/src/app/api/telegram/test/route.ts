@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
-  const { botToken, chatId, message } = await req.json();
+  const { botToken: inputToken, chatId, message } = await req.json();
 
-  if (!botToken || !chatId) {
-    return NextResponse.json({ error: "Missing botToken or chatId" }, { status: 400 });
+  let botToken = inputToken;
+  if (botToken === "********") {
+    botToken = process.env.TELEGRAM_BOT_TOKEN;
+  }
+
+  if (!botToken || botToken === "********" || !chatId) {
+    return NextResponse.json({ error: "Missing or invalid botToken or chatId" }, { status: 400 });
   }
 
   const text = message || "🚀 This is a test message from your Multi-Agent Task Dashboard!";

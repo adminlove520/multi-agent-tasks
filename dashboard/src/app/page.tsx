@@ -44,7 +44,7 @@ export default function Home() {
         alert(locale === "en" ? "Telegram Bot Commands activated!" : "Telegram Bot 指令集已激活！");
       } else {
         const data = await res.json();
-        alert(`Error: ${data.error}`);
+        alert(`Activation Failed: ${data.error}\n\nURL: ${data.url || "Unknown"}`);
       }
     } catch (err) {
       console.error(err);
