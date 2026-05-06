@@ -56,18 +56,22 @@ export async function POST(req: Request) {
     // --- 智能体路由增强 (TG @ 转 GitHub @agent/) ---
     let processedContent = args.slice(1).join(" ");
     
-    // 如果消息中包含 @botname，自动尝试映射到对应的虚拟身份
-    const botToAgentMap: Record<string, string> = {
-      "help_localbot": "@agent/taizi",
-      "caddycherrybot": "@agent/xiaoxi",
-      "Anwsermebot": "@agent/answer"
-    };
-
-    for (const [bot, agent] of Object.entries(botToAgentMap)) {
-      const botMention = `@${bot}`;
-      if (processedContent.includes(botMention)) {
-        processedContent = processedContent.replace(new RegExp(botMention, "gi"), agent);
-      }
+    // 动态从 agents.json 获取机器人映射
+    try {
+      const { data: configData }: any = await octokit.rest.repos.getContent({ owner, repo, path: "agents.json" });
+      const config = JSON.parse(Buffer.from(configData.content, "base64").toString());
+      
+      config.agents.forEach((agent: any) => {
+        if (agent.tgUsername) {
+          const botMention = `@${agent.tgUsername}`;
+          const virtualMention = `@agent/${agent.name.toLowerCase().replace(/ /g, "_")}`;
+          if (processedContent.toLowerCase().includes(botMention.toLowerCase())) {
+            processedContent = processedContent.replace(new RegExp(botMention, "gi"), virtualMention);
+          }
+        }
+      });
+    } catch (e) {
+      console.warn("Failed to load agents.json for mapping", e);
     }
 
 

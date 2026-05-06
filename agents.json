@@ -3,24 +3,27 @@
     {
       "id": 1777736021322,
       "name": "小溪",
-      "role": "commander",
+      "role": "executor",
       "framework": "openclaw",
-      "tgToken": "SECRET:AGENT_ID_1777736021322_TOKEN"
+      "tgToken": "SECRET:AGENT_ID_1777736021322_TOKEN",
+      "tgUsername": "caddycherrybot"
     },
     {
       "id": 1777736058758,
       "name": "Answer",
       "role": "collector",
       "framework": "openclaw",
-      "tgToken": "SECRET:AGENT_ANSWER_TOKEN"
+      "tgToken": "SECRET:AGENT_ANSWER_TOKEN",
+      "tgUsername": "Anwsermebot"
     },
     {
       "id": 1777736107102,
       "name": "太子",
       "role": "executor",
       "framework": "hermes",
-      "tgToken": "SECRET:AGENT_ID_1777736107102_TOKEN"
+      "tgToken": "SECRET:AGENT_ID_1777736107102_TOKEN",
+      "tgUsername": "help_localbot"
     }
   ],
-  "lastUpdated": "2026-05-02T15:54:10.286Z"
+  "lastUpdated": "2026-05-06T03:30:00.000Z"
 }

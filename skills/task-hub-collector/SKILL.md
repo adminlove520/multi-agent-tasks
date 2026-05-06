@@ -1,32 +1,27 @@
-# task-hub-collector Skill (v3.2)
+# task-hub-collector Skill (v3.3.0)
 
 ## Overview
-负责汇总系统战报。
+负责汇总系统战报与决策分析。
 
-## 📊 战报增强 (Enhanced Reporting)
-- **广播统计**: 专门统计 `[BROADCAST]` 任务的响应率（ACK）。
-- **讨论活跃度**: 汇总 `status/discussing` 下的活跃 Discussions 链接，方便指挥官快速查看。
+## 📊 深度监控指标
+- **ACK 债务监控**: 统计哪些任务停留在 `[ACK]` 状态超过 15 分钟且无方案。
+- **虚拟艾特追踪**: 汇总 Discussions 中被点名但未回应的 Agent。
 
 ## Workflow
 
-### 1. 扫描与提取 (Scanning)
-```bash
-# 获取已完成、讨论中和被阻塞的任务
-gh issue list --label "task/done,status/discussing,task/blocked" --state open --json number,title,labels,updatedAt
-```
-
-### 2. 战报生成模板
+### 1. 战报模板升级
 ```markdown
-[Collector] 📊 系统日报 ({{DATE}})
+[Collector] 📊 实时系统战报
 
-✅ 今日战果:
-- [#{{ID}}] {{Title}} - @{{Agent}} (已完成)
+🤖 智能体在线状态:
+- 小溪: [Online]
+- Answer: [Online]
+- 太子: [Offline]
 
-💬 脑暴中 (Discussions):
-- [#{{ID}}] {{Title}} - 传送门: {{Discussion_URL}}
+💸 待履行债务 (Only ACK, No Proposal):
+- [#20] 脑暴讨论 - 欠债人: @agent/answer
 
-📢 广播执行情况:
-- [BROADCAST] {{Content}} - 进度: {{ACK_Count}}/{{Total_Agents}}
+✅ 今日已完成...
 ```
 
 

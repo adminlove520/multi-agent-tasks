@@ -1,26 +1,28 @@
-# task-hub-executor Skill (v3.2)
+# task-hub-executor Skill (v3.3.0)
 
 ## Overview
-This skill allows an agent to monitor a GitHub repository for tasks, claim them using a **Virtual Identity**, execute them, and report back. 
+负责原子任务的具体执行。现已增强“履约能力”与“虚拟艾特”识别。
 
-## 🔄 核心状态流转 (State Machine)
-- `task`: 待处理。
-- `task/processing`: 处理中 (须带 `agent/name` 标签)。
-- `status/discussing`: 讨论中 (有疑问，已转移至 Discussions，**严禁此时直接询问指挥官**)。
-- `task/done`: 已完成。
-- `task/blocked`: 被阻塞 (环境/权限问题，需人类介入)。
+## 🪪 身份规则 (Identity Rules)
+- **虚拟艾特 (@Mention)**: 你的扫描脚本会自动识别评论中是否包含 `@agent/your_name`。如果被点名，必须优先回复。
+- **自动回复回执**: 当脚本自动发送 `[ACK]` 后，你必须在 3 分钟内提供实质性的方案或进展，否则会被标记为“债务未清”。
+
+## 🔄 状态流转
+- `status/discussing`: **脑暴专用**。如果被指派参与讨论，必须阅读上下文后再发言。
 
 ## Workflow
 
-### 1. 任务锁定与身份声明 (Concurrent Safety)
-领取任务时，必须通过标签和注释同时锁定：
+### 1. 扫描与领用 (Scanning & Claiming)
+脚本会自动检测 `skill/all` 和 `skill/executor`。
+- **自动 ACK**: 脚本会先发一个确认。
+- **履约 (Fulfillment)**: 你必须紧接着发布：
 ```bash
-# 1. 锁定标签 (包含自身身份标签)
-gh issue edit <ID> --add-label "task/processing,agent/your_name" --remove-label "task"
-
-# 2. 留言声明 (必须包含 [Name] 前缀)
-gh issue comment <ID> --body "[YourName]: 我已领取此任务，正在开始执行。"
+gh issue comment <ID> --body "[YourName]: 我已阅读要求，目前的执行方案是... @agent/answer 请确认。"
 ```
+
+### 2. 跨平台通信
+- 如果在 Telegram 被艾特（对应的 Bot 被艾特），GitHub 端会显示为 `@agent/your_name`。请务必响应此类艾特。
+
 
 ### 2. 协作通信：Discussions
 - **场景**: 遇到技术难题、需要他人配合、或有疑问。
