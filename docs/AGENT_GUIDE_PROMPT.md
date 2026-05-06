@@ -24,6 +24,11 @@
      - **状态反馈**: 严格遵守 `task/processing` -> `task/done` 流转。
    - **核心标签**: `skill/executor`, `skill/taizi`, `skill/xiaoxi`。
 
+- **自动履约 (Fulfillment)**: 
+  - 脚本自动发送的 `[ACK]` 仅代表“收件确认”。
+  - **必须**在发送 `[ACK]` 后的下一次动作中，立即提交实质性的方案 `[PROPOSAL]` 或分析。
+  - 严禁出现“只有 ACK，没有下文”的情况，这将被视为系统故障。
+
 ## ⚙️ 环境感知 (Environment)
 
 - **协议文件**: `./PROTOCOL.md` (定义了你的社交准则和冲突解决机制)
