@@ -74,23 +74,6 @@ export const translations = {
     }
   },
   zh: {
-    // ...
-    telegram: {
-      title: "Telegram 控制中心",
-      bot_token: "机器人 Token",
-      channel_id: "频道 ID",
-      status: "连接状态",
-      test: "发送测试消息",
-      activate: "激活 Bot 指令集",
-      active: "Bot 指令集：已激活",
-      inactive: "Bot 指令集：未激活",
-      guide: "配置指南",
-      step1: "1. 通过 @BotFather 创建机器人",
-      step2: "2. 创建频道并关联群组",
-      step3: "3. 将机器人设为频道管理员",
-    }
-  },
-  zh: {
     title: "任务看板",
     new_task: "新建任务",
     sign_out: "退出登录",
@@ -155,6 +138,9 @@ export const translations = {
       channel_id: "频道 ID",
       status: "连接状态",
       test: "发送测试消息",
+      activate: "激活 Bot 指令集",
+      active: "Bot 指令集：已激活",
+      inactive: "Bot 指令集：未激活",
       guide: "配置指南",
       step1: "1. 通过 @BotFather 创建机器人",
       step2: "2. 创建频道并关联群组",
