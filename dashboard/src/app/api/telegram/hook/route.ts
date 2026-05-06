@@ -64,7 +64,7 @@ export async function POST(req: Request) {
       config.agents.forEach((agent: any) => {
         if (agent.tgUsername) {
           const botMention = `@${agent.tgUsername}`;
-          const virtualMention = `@agent/${agent.name.toLowerCase().replace(/ /g, "_")}`;
+          const virtualMention = `@agent/${agent.slug || agent.name.toLowerCase().replace(/ /g, "_")}`;
           if (processedContent.toLowerCase().includes(botMention.toLowerCase())) {
             processedContent = processedContent.replace(new RegExp(botMention, "gi"), virtualMention);
           }
