@@ -28,6 +28,9 @@ export default function Home() {
   const [agents, setAgents] = useState<any[]>([]);
   const [isSavingAgents, setIsSavingAgents] = useState(false);
   const [isLoadingAgents, setIsLoadingAgents] = useState(false);
+  
+  const t = translations[locale];
+
   const handleActivateTgWebhook = async () => {
     setIsActivatingTg(true);
     try {
