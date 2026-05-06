@@ -22,6 +22,16 @@ IDENTITY_LABEL="agent/$AGENT_NAME_LOWER"
 echo "===================================================="
 echo "🤖 Agent Identity: $AGENT_NAME ($IDENTITY_LABEL)"
 echo "📡 Role Focus: $MY_ROLE_LABEL"
+# 0. 并发锁保护 (Concurrency Lock)
+# 防止定时任务重叠执行
+LOCKFILE="/tmp/agent_${AGENT_NAME_LOWER}.lock"
+exec 200>$LOCKFILE
+flock -n 200 || { echo "⚠️ Agent $AGENT_NAME is already running. Skipping this cycle."; exit 0; }
+
+# 0.1 依赖检查
+command -v jq >/dev/null 2>&1 || { echo "❌ Error: 'jq' is not installed."; exit 1; }
+command -v gh >/dev/null 2>&1 || { echo "❌ Error: 'gh' CLI is not installed."; exit 1; }
+
 echo "===================================================="
 
 # 1. 增量拉取代码与长效记忆同步
@@ -34,8 +44,10 @@ echo "🧠 Syncing group memory from Discussions..."
 gh discussion list --category "Brainstorming" --limit 10 --json title,body,comments > "inbox/group_memory.json"
 
 # 2. 注册活跃状态 (Heartbeat/Webhook Accelerator)
-# 告诉 Dashboard 这一台 Agent 正在线，准备接收 Webhook 实时通知（如果环境允许）
-# curl -s -X POST "$DASHBOARD_URL/api/agents/heartbeat" -d "name=$AGENT_NAME&role=$MY_ROLE_LABEL" > /dev/null
+echo "💓 [2/4] Sending heartbeat to dashboard..."
+curl -s -X POST "$DASHBOARD_URL/api/agents" \
+  -H "Content-Type: application/json" \
+  -d "{\"name\":\"$AGENT_NAME\", \"role\":\"$MY_ROLE_LABEL\", \"action\":\"heartbeat\"}" > /dev/null
 
 # 3. 扫描 Webhook 缓存
 # ... (existing code)

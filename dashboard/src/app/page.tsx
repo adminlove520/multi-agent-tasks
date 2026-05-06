@@ -247,9 +247,9 @@ export default function Home() {
     <main className="min-h-screen bg-gray-50 pb-20">
       <div className="bg-white border-b border-gray-200">
         <div className="container mx-auto max-w-5xl px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-lg text-white">
-              <ListTodo className="h-6 w-6" />
+          <div className="flex items-center gap-4">
+            <div className="p-2 bg-blue-600 rounded-xl text-white">
+              <Plus className="h-6 w-6" />
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900 leading-tight">{t.title}</h1>
@@ -259,6 +259,7 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-4">
+
             <button
               onClick={() => setLocale(locale === "en" ? "zh" : "en")}
               className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50"
@@ -613,7 +614,15 @@ export default function Home() {
                     agents.map((agent) => (
                       <div key={agent.id} className="group relative grid grid-cols-1 md:grid-cols-4 gap-4 p-6 bg-gray-50 rounded-2xl border border-gray-200 hover:border-blue-200 transition-all">
                         <div className="space-y-1">
-                          <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t.agents.name}</label>
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t.agents.name}</label>
+                            {agent.online && (
+                              <span className="flex items-center gap-1 text-[10px] text-green-600 font-bold bg-green-50 px-2 py-0.5 rounded-full animate-pulse">
+                                <span className="h-1.5 w-1.5 rounded-full bg-green-500"></span>
+                                Online
+                              </span>
+                            )}
+                          </div>
                           <input 
                             type="text" 
                             className="w-full bg-white border border-gray-200 rounded-lg p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
@@ -622,6 +631,7 @@ export default function Home() {
                             placeholder="e.g. 小溪"
                           />
                         </div>
+
                         <div className="space-y-1">
                           <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t.agents.role}</label>
                           <select 

@@ -7,6 +7,9 @@ import { encryptSecret } from "@/lib/crypto";
 
 const AGENTS_PATH = "agents.json";
 
+// 全局内存缓存 Agent 心跳 (Node.js 运行时生存周期内有效)
+let agentHeartbeats: Record<string, number> = {};
+
 export async function GET() {
   const session: any = await getServerSession(authOptions);
   const token = session?.accessToken || process.env.GITHUB_TOKEN;
@@ -21,10 +24,12 @@ export async function GET() {
       const content = Buffer.from(data.content, "base64").toString("utf-8");
       const config = JSON.parse(content);
       
-      // 关键：脱敏处理
+      const now = Date.now();
       const sanitizedAgents = (config.agents || []).map((agent: any) => ({
         ...agent,
-        tgToken: agent.tgToken ? "********" : ""
+        tgToken: agent.tgToken ? "********" : "",
+        // 5分钟内有心跳视为在线
+        online: agentHeartbeats[agent.name] && (now - agentHeartbeats[agent.name] < 300000)
       }));
 
       return NextResponse.json({ agents: sanitizedAgents });
@@ -37,11 +42,20 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const payload = await req.json();
+
+  // 处理心跳上报 (不需要 Session 校验，通过 Token 校验或简单的 Agent 名称即可)
+  if (payload.action === "heartbeat") {
+    agentHeartbeats[payload.name] = Date.now();
+    return NextResponse.json({ success: true, timestamp: agentHeartbeats[payload.name] });
+  }
+
   const session: any = await getServerSession(authOptions);
   if (!session?.accessToken) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const octokit = new Octokit({ auth: session.accessToken });
-  const { agents } = await req.json();
+  const { agents } = payload;
+
 
   try {
     const { owner, repo } = await getRepoInfo(octokit);
