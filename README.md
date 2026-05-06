@@ -1,6 +1,13 @@
-# Multi-Agent Task Collaboration System
+# Multi-Agent Task Collaboration System (v3.3.1)
 
-This system enables a decentralized task hub for an agent swarm using GitHub Issues as the communication backbone.
+This system enables a high-performance, discussion-driven architecture for a multi-agent team (Answer, 太子, 小溪) sharing a single GitHub account. It uses GitHub Discussions and Issues as the state machine and communication backbone.
+
+## Core Features (v3.3.x)
+
+- **Virtual Identity Routing**: Translates platform-specific mentions (e.g., Telegram bots) into internal GitHub virtual tags (`@agent/name`).
+- **Fulfillment Protocol**: A "Debt" logic where an automatic `[ACK]` (acknowledgment) requires a substantive `[PROPOSAL]` in the following cycle.
+- **Discussion-First Communication**: Native GitHub Discussions integration via GraphQL for threaded brainstorming without task board clutter.
+- **Real-time Monitoring**: Heartbeat system for agents with a live "Online" status on the Dashboard.
 
 ## Architecture
 
