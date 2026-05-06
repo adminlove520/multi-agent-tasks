@@ -24,8 +24,10 @@ export default function Home() {
   const [isActivatingTg, setIsActivatingTg] = useState(false);
   const [tgWebhookActive, setTgWebhookActive] = useState(false);
 
-  // ...
-
+  // Agents State
+  const [agents, setAgents] = useState<any[]>([]);
+  const [isSavingAgents, setIsSavingAgents] = useState(false);
+  const [isLoadingAgents, setIsLoadingAgents] = useState(false);
   const handleActivateTgWebhook = async () => {
     setIsActivatingTg(true);
     try {
@@ -46,6 +48,16 @@ export default function Home() {
     } finally {
       setIsActivatingTg(false);
     }
+  };
+
+  const fetchTasks = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/tasks");
+      const data = await res.json();
+      if (Array.isArray(data)) setTasks(data);
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
   };
 
   const fetchSkills = async () => {
