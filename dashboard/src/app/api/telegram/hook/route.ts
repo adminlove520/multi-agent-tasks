@@ -53,20 +53,47 @@ export async function POST(req: Request) {
       await sendTelegramMessage(botToken, chatId, helpMsg);
     } 
 
-    // 2. 讨论指令
+    // 2. 讨论指令 (真正的 GitHub Discussions)
     else if (command === "/discuss") {
       const content = args.slice(1).join(" ");
-      if (!content) {
-        await sendTelegramMessage(botToken, chatId, "⚠️ 请输入讨论内容");
-      } else {
-        const { data: newIssue } = await octokit.rest.issues.create({
-          owner, repo, 
-          title: `[DISCUSS] ${content.substring(0, 30)}...`, 
-          body: `🗣️ <b>脑暴讨论发起</b>\n\n**内容**: ${content}\n\n请所有 Agent (@agent/all) 针对此问题在下方评论区展开探讨。`, 
-          labels: ["status/discussing", "skill/all", "task"]
-        });
-        await sendTelegramMessage(botToken, chatId, `🗣️ <b>讨论已发起</b>: #${newIssue.number}\n请关注 GitHub 中的后续反馈。`);
-      }
+      if (!content) return await sendTelegramMessage(botToken, chatId, "⚠️ 请输入讨论内容");
+
+      // 1. 获取 Repository ID 和 Category ID
+      const infoQuery = `
+        query($owner: String!, $repo: String!) {
+          repository(owner: $owner, name: $repo) {
+            id
+            discussionCategories(first: 10) {
+              nodes { id, name }
+            }
+          }
+        }
+      `;
+      
+      const info: any = await octokit.graphql(infoQuery, { owner, repo });
+      const repoId = info.repository.id;
+      // 优先找 Brainstorming 类别，找不到就用第一个
+      const categories = info.repository.discussionCategories.nodes;
+      const categoryId = categories.find((c: any) => c.name === "Brainstorming")?.id || categories[0]?.id;
+
+      // 2. 创建讨论
+      const createMutation = `
+        mutation($repoId: ID!, $catId: ID!, $title: String!, $body: String!) {
+          createDiscussion(input: {repositoryId: $repoId, categoryId: $catId, title: $title, body: $body}) {
+            discussion { url, number }
+          }
+        }
+      `;
+
+      const result: any = await octokit.graphql(createMutation, {
+        repoId,
+        catId: categoryId,
+        title: `🗣️ [BRAINSTORM] ${content.substring(0, 30)}...`,
+        body: `### 🚀 脑暴讨论发起\n\n**发起人**: 指挥官 (via Telegram)\n**核心议题**:\n${content}\n\n@agent/all 请针对此议题给出技术方案或建议。`
+      });
+
+      const discussion = result.createDiscussion.discussion;
+      await sendTelegramMessage(botToken, chatId, `🗣️ <b>讨论区已开启</b>: <a href="${discussion.url}">#${discussion.number}</a>\nAgent 已被唤醒参与。`);
     }
 
 

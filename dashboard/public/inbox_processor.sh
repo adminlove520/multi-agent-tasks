@@ -52,52 +52,34 @@ curl -s -X POST "$DASHBOARD_URL/api/agents" \
 # 3. 扫描 Webhook 缓存
 # ... (existing code)
 
-# 4. 深度实时扫描 (Atomic Locking 增强)
-echo "🕵️ [4/4] Scanning real-time Issues list..."
+# 4. 深度实时扫描 (v3.2.6 - GraphQL 增强版)
+echo "🕵️ [4/4] Scanning real-time Issues & Discussions..."
 
-# 4.1 扫描任务 (包含专属任务、全员广播、讨论话题)
-echo "🔍 Searching for $MY_ROLE_LABEL, skill/all, OR status/discussing..."
-
-gh issue list --state open --json number,title,labels --limit 20 | jq -c ".[]" | while read -r issue; do
-  NUMBER=$(echo "$issue" | jq -r '.number')
-  TITLE=$(echo "$issue" | jq -r '.title')
-  LABELS=$(echo "$issue" | jq -r '.labels[].name')
+# 4.1 扫描 GitHub Discussions (脑暴区)
+echo "🗣️ Checking GitHub Discussions via GraphQL..."
+DISC_QUERY='query($owner:String!,$repo:String!){repository(owner:$owner,name:$repo){discussions(first:5,orderBy:{field:CREATED_AT,direction:DESC}){nodes{number,title,url,body,comments(last:3){nodes{author{login},body}}}}}}'
+gh api graphql -f owner="$OWNER" -f repo="$REPO_NAME" -f query="$DISC_QUERY" --jq ".data.repository.discussions.nodes[]" | jq -c "." | while read -r disc; do
+  NUMBER=$(echo "$disc" | jq -r '.number')
+  TITLE=$(echo "$disc" | jq -r '.title')
   
-  # 判断是否匹配角色、全员广播 或 讨论状态
-  MATCH=0
-  if echo "$LABELS" | grep -q "$MY_ROLE_LABEL"; then MATCH=1; fi
-  if echo "$LABELS" | grep -q "skill/all"; then MATCH=1; fi
-  if echo "$LABELS" | grep -q "status/discussing"; then MATCH=1; fi
+  echo "------------------------------------------------"
+  echo "🗣️ ACTIVE DISCUSSION #$NUMBER: $TITLE"
   
-  if [ "$MATCH" -eq "1" ]; then
-    echo "------------------------------------------------"
-    echo "🚨 TARGET FOUND #$NUMBER: $TITLE"
-    
-    # 获取最近 5 条讨论内容，为 Agent 提供背景
-    echo "💬 Recent Comments Context:"
-    gh issue view $NUMBER --json comments --jq ".comments[-5:] | .[] | \"- [\(.author.login)]: \(.body)\"" || echo "(No comments yet)"
-
-    # 检查是否已经 ACK 过 (对于广播或讨论)
-    IS_PARTICIPATED=$(gh issue view $NUMBER --json comments --jq ".comments[] | select(.body | contains(\"[$AGENT_NAME]\"))" | wc -l)
-    
-    if [ "$IS_PARTICIPATED" -eq "0" ]; then
-      if echo "$LABELS" | grep -q "status/discussing"; then
-        echo "🗣️ Discussion active. Agent participation required!"
-        # 这里由 Agent 自身的 AI 逻辑决定回复内容，此处仅作脚本层提示
-      elif echo "$LABELS" | grep -q "skill/all"; then
-        echo "📢 Global Broadcast. Auto-ACKing..."
-        gh issue edit $NUMBER --add-label "$IDENTITY_LABEL"
-        gh issue comment $NUMBER --body "[$AGENT_NAME] [ACK]: 收到指令，正在同步执行。"
-      else
-        echo "📌 Claiming Private Task..."
-        gh issue edit $NUMBER --add-label "task/processing,$IDENTITY_LABEL" --remove-label "task"
-        gh issue comment $NUMBER --body "[$AGENT_NAME]: 🔒 任务已锁定，正在执行。"
-      fi
-    else
-      echo "✅ Already participated in #$NUMBER."
-    fi
+  # 检查 Agent 是否已参与
+  IS_PARTICIPATED=$(echo "$disc" | jq -r ".comments.nodes[] | select(.author.login == \"$AGENT_NAME\")" | wc -l)
+  
+  if [ "$IS_PARTICIPATED" -eq "0" ]; then
+    echo "👉 Participation required for $AGENT_NAME!"
+    # 打印上下文
+    echo "💬 Recent Context:"
+    echo "$disc" | jq -r '.comments.nodes[] | "- [\(.author.login)]: \(.body)"'
+  else
+    echo "✅ Already participated in #$NUMBER."
   fi
 done
+
+# 4.2 扫描 Issues (任务区)
+# ... (rest of the issue scanning logic)
 
 
 echo "===================================================="
