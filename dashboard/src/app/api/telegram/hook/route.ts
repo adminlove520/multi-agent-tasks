@@ -26,9 +26,21 @@ export async function POST(req: Request) {
   const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN || process.env.GITHUB_SECRET });
 
   try {
-    const { owner, repo } = await getRepoInfo(octokit);
+    // --- 命令解析 (支持 /command@botname) ---
     const args = rawText.split(" ");
-    const command = args[0].toLowerCase().split("@")[0]; 
+    const fullCommand = args[0].toLowerCase();
+    const command = fullCommand.split("@")[0];
+    const targetBot = fullCommand.split("@")[1];
+
+    // 如果指定了目标机器人，且不是当前机器人，则忽略
+    // 注意：botToken 格式为 id:secret，我们通过 getMe 获取 username
+    const meRes = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
+    const meData = await meRes.json();
+    const myUsername = meData.result?.username?.toLowerCase();
+
+    if (targetBot && myUsername && targetBot !== myUsername) {
+      return NextResponse.json({ ok: true });
+    }
 
     const knownCommands = ["/start", "/help", "/tasks", "/task", "/summary", "/new", "/broadcast", "/agents", "/status", "/bootstrap", "/discuss"];
     
@@ -38,6 +50,24 @@ export async function POST(req: Request) {
       }
       return NextResponse.json({ ok: true });
     }
+
+    // --- 智能体路由增强 (TG @ 转 GitHub @agent/) ---
+    let processedContent = args.slice(1).join(" ");
+    
+    // 如果消息中包含 @botname，自动尝试映射到对应的虚拟身份
+    const botToAgentMap: Record<string, string> = {
+      "help_localbot": "@agent/taizi",
+      "caddycherrybot": "@agent/xiaoxi",
+      "Anwsermebot": "@agent/answer"
+    };
+
+    for (const [bot, agent] of Object.entries(botToAgentMap)) {
+      const botMention = `@${bot}`;
+      if (processedContent.includes(botMention)) {
+        processedContent = processedContent.replace(new RegExp(botMention, "gi"), agent);
+      }
+    }
+
 
     // 1. 帮助菜单
     if (command === "/start" || command === "/help") {
@@ -55,7 +85,7 @@ export async function POST(req: Request) {
 
     // 2. 讨论指令 (真正的 GitHub Discussions)
     else if (command === "/discuss") {
-      const content = args.slice(1).join(" ");
+      const content = processedContent;
       if (!content) return await sendTelegramMessage(botToken, chatId, "⚠️ 请输入讨论内容");
 
       // 1. 获取 Repository ID 和 Category ID
@@ -99,10 +129,11 @@ export async function POST(req: Request) {
 
     // 3. 广播指令
     else if (command === "/broadcast") {
-      const content = args.slice(1).join(" ");
+      const content = processedContent;
       if (!content) {
         await sendTelegramMessage(botToken, chatId, "⚠️ 请输入广播内容");
       } else {
+
         const { data: newIssue } = await octokit.rest.issues.create({
           owner, repo, 
           title: `[BROADCAST] ${content.substring(0, 30)}`,
