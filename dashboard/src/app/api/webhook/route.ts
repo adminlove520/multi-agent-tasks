@@ -9,7 +9,13 @@ export async function POST(req: Request) {
   const signature = req.headers.get("x-hub-signature-256");
   const secret = process.env.WEBHOOK_SECRET;
 
-  // ... (Verify signature code remains)
+  if (secret && signature) {
+    const hmac = crypto.createHmac("sha256", secret);
+    const digest = "sha256=" + hmac.update(body).digest("hex");
+    if (signature !== digest) {
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
+  }
 
   const payload = JSON.parse(body);
   const event = req.headers.get("x-github-event");
@@ -17,59 +23,65 @@ export async function POST(req: Request) {
 
   try {
     const { owner, repo } = await getRepoInfo(octokit);
-    
-    // ... (Event processing code remains)
-
-    // 📩 追加通知逻辑：同步 GitHub 动态到 Telegram
     const tgToken = process.env.TELEGRAM_BOT_TOKEN;
     const tgChatId = process.env.TELEGRAM_CHAT_ID;
 
     if (tgToken && tgChatId) {
       const action = payload.action;
       
-      // 1. 新任务/新讨论通知
-      if (["issues", "discussion"].includes(event!) && (action === "opened" || action === "created")) {
-        const title = payload.issue?.title || payload.discussion?.title;
-        const sender = payload.sender.login;
-        const url = payload.issue?.html_url || payload.discussion?.html_url;
-
-        const msg = `🚀 <b>New Entry in ${repo}</b>\n\n` +
-                    `📌 <b>Title</b>: ${title}\n` +
-                    `👤 <b>From</b>: ${sender}\n` +
-                    `🔗 <a href="${url}">View on GitHub</a>`;
+      // 1. 新任务通知
+      if (event === "issues" && action === "opened") {
+        const msg = `🚀 <b>New Task in ${repo}</b>\n\n` +
+                    `📌 <b>Title</b>: ${payload.issue.title}\n` +
+                    `👤 <b>From</b>: ${payload.sender.login}\n` +
+                    `🔗 <a href="${payload.issue.html_url}">View on GitHub</a>`;
         await sendTelegramMessage(tgToken, tgChatId, msg);
       }
 
-      // 2. 智能体回复通知 (Issue Comment)
-      if (event === "issue_comment" && action === "created") {
-        const body = payload.comment.body as string;
-        const sender = payload.sender.login;
-        const issueTitle = payload.issue.title;
+      // 2. 讨论区动态转发 (Discussion Support)
+      if (event === "discussion" || event === "discussion_comment") {
+        if (action === "created" || action === "opened") {
+          const title = payload.discussion?.title;
+          const sender = payload.sender.login;
+          const bodyContent = payload.comment?.body || payload.discussion?.body || "";
+          const url = payload.discussion?.html_url;
 
-        // 只有包含 [Name] 前缀的评论（说明是 Agent 回复）才转发到 TG，防止普通操作干扰
-        if (body.startsWith("[") && body.includes("]")) {
-          const msg = `💬 <b>Agent Response</b>\n` +
-                      `📌 <b>Task</b>: ${issueTitle}\n` +
+          const msg = `🗣️ <b>Discussion Update</b>\n` +
+                      `📌 <b>Topic</b>: ${title}\n` +
                       `👤 <b>Sender</b>: ${sender}\n\n` +
-                      `${body}`;
+                      `${bodyContent.substring(0, 500)}${bodyContent.length > 500 ? "..." : ""}\n\n` +
+                      `🔗 <a href="${url}">View Discussion</a>`;
           await sendTelegramMessage(tgToken, tgChatId, msg);
         }
       }
-      // 3. Webhook 加速器 (Accelerator)
-      // 如果环境中配置了 AGENT_PINGS (逗号分隔的 URL)，实时转发通知
+
+      // 3. 智能体回复通知 (Issue Comment)
+      if (event === "issue_comment" && action === "created") {
+        const commentBody = payload.comment.body as string;
+        if (commentBody.startsWith("[") && commentBody.includes("]")) {
+          const msg = `💬 <b>Agent Response</b>\n` +
+                      `📌 <b>Task</b>: ${payload.issue.title}\n` +
+                      `👤 <b>Sender</b>: ${payload.sender.login}\n\n` +
+                      `${commentBody}`;
+          await sendTelegramMessage(tgToken, tgChatId, msg);
+        }
+      }
+
+      // 4. Webhook 加速器 (Accelerator)
       const agentPings = process.env.AGENT_PINGS;
       if (agentPings) {
         const pings = agentPings.split(",");
-        Promise.all(pings.map(url => 
+        pings.forEach(url => {
           fetch(url.trim(), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ event, action, payload })
-          }).catch(e => console.error("Ping failed", url, e.message))
-        ));
+          }).catch(e => console.error("Ping failed", url, e.message));
+        });
       }
     }
 
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("Webhook Error:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });

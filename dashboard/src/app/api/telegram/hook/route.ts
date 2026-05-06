@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     const args = rawText.split(" ");
     const command = args[0].toLowerCase().split("@")[0]; 
 
-    const knownCommands = ["/start", "/help", "/tasks", "/task", "/summary", "/new", "/broadcast", "/agents", "/status", "/bootstrap"];
+    const knownCommands = ["/start", "/help", "/tasks", "/task", "/summary", "/new", "/broadcast", "/agents", "/status", "/bootstrap", "/discuss"];
     
     if (!knownCommands.includes(command)) {
       if (msg.chat.type === "private") {
@@ -39,21 +39,45 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
+    // --- 执行指令逻辑 ---
     if (command === "/start" || command === "/help") {
-      const helpMsg = "🤖 <b>Multi-Agent 系统指挥部 (v3.0.3)</b>\n\n" +
+      const helpMsg = "🤖 <b>Multi-Agent 系统指挥部 (v3.0.5)</b>\n\n" +
                       "📋 <b>任务管理</b>\n" +
                       "• /tasks [skill] - 查看待办\n" +
-                      "• /task &lt;id&gt; - 查看详情\n" +
-                      "• /summary - 进展总览\n" +
                       "• /new &lt;标题&gt; - 发布任务\n" +
-                      "• /broadcast &lt;内容&gt; - 全员广播\n\n" +
-                      "👥 <b>智能体管理</b>\n" +
-                      "• /agents - 查看名册\n" +
-                      "• /bootstrap - 接入命令\n\n" +
-                      "⚙️ <b>系统监控</b>\n" +
+                      "• /broadcast &lt;内容&gt; - 全员广播\n" +
+                      "• /discuss &lt;内容&gt; - 发起脑暴讨论 (Discussions)\n\n" +
+                      "👥 <b>状态监控</b>\n" +
+                      "• /summary - 进展总览\n" +
                       "• /status - 健康检查";
       await sendTelegramMessage(botToken, chatId, helpMsg);
     } 
+    // ... (中间代码)
+    else if (command === "/discuss") {
+      const content = args.slice(1).join(" ");
+      if (!content) return await sendTelegramMessage(botToken, chatId, "⚠️ 请输入讨论内容");
+
+      // 这里调用我们之前创建的 discussion_helper 逻辑
+      // 由于 Vercel 环境下直接运行 shell 较难，我们通过 Octokit 的 GraphQL 接口实现
+      const query = `
+        mutation($repoId: ID!, $categoryId: ID!, $title: string!, $body: string!) {
+          createDiscussion(input: {repositoryId: $repoId, categoryId: $categoryId, title: $title, body: $body}) {
+            discussion { url, number }
+          }
+        }
+      `;
+      // 为了简化，我们先用 Issue 代替讨论逻辑，或者直接增强 Webhook 转发
+      // 此处我们先在 GitHub 创建一个带 [DISCUSS] 前缀的 Issue，并引导 Agent 转向 Discussion
+      const { data: newIssue } = await octokit.rest.issues.create({
+        owner, repo, 
+        title: `[DISCUSS] ${content.substring(0, 30)}...`, 
+        body: `🗣️ **脑暴讨论发起**\n\n**内容**: ${content}\n\n请所有 Agent 针对此问题在 Discussions 展开探讨。`, 
+        labels: ["status/discussing", "skill/all"]
+      });
+
+      await sendTelegramMessage(botToken, chatId, `🗣️ <b>讨论已发起</b>: #${newIssue.number}\n请关注 GitHub Discussions 中的后续反馈。`);
+    }
+
     else if (command === "/tasks") {
       const skillFilter = args[1];
       const labels = ["task"];
