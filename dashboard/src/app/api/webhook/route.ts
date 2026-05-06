@@ -27,10 +27,14 @@ export async function POST(req: Request) {
     if (tgToken && tgChatId && ["issues", "discussion"].includes(event!)) {
       const action = payload.action;
       if (action === "opened" || action === "created") {
+        const title = payload.issue?.title || payload.discussion?.title;
+        const sender = payload.sender.login;
+        const url = payload.issue?.html_url || payload.discussion?.html_url;
+
         const msg = `🚀 *New Task in ${repo}*\n\n` +
-                    `📌 *Title*: ${eventData.title}\n` +
-                    `👤 *From*: ${eventData.sender}\n` +
-                    `🔗 [View on GitHub](${eventData.url})`;
+                    `📌 *Title*: ${title}\n` +
+                    `👤 *From*: ${sender}\n` +
+                    `🔗 [View on GitHub](${url})`;
         await sendTelegramMessage(tgToken, tgChatId, msg);
       }
     }
