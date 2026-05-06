@@ -20,144 +20,99 @@ export async function POST(req: Request) {
   try {
     const { owner, repo } = await getRepoInfo(octokit);
     const args = rawText.split(" ");
-    const command = args[0].toLowerCase();
+    const command = args[0].toLowerCase().split("@")[0]; 
 
-    // --- 命令集定义 ---
+    const knownCommands = ["/start", "/help", "/tasks", "/task", "/summary", "/new", "/broadcast", "/agents", "/status", "/bootstrap"];
+    if (!knownCommands.includes(command)) {
+      if (msg.chat.type === "private") {
+        await sendTelegramMessage(botToken, chatId, "❌ 未知指令。输入 /help 查看可用命令。");
+      }
+      return NextResponse.json({ ok: true });
+    }
 
-    // 1. 帮助菜单
     if (command === "/start" || command === "/help") {
-      const helpMsg = `🤖 *Multi-Agent 系统指挥部 (v3.0.2)*\n\n` +
-                      `📋 *任务管理*\n` +
-                      `• /tasks [skill] - 查看待办 (可选技能过滤)\n` +
-                      `• /task <id> - 查看任务详情\n` +
-                      `• /summary - 任务进展总览\n` +
-                      `• /new <标题> - 快速发布原子任务\n\n` +
-                      `👥 *智能体管理*\n` +
-                      `• /agents - 查看当前在线名册\n` +
-                      `• /bootstrap - 获取引导接入命令\n\n` +
-                      `⚙️ *系统监控*\n` +
-                      `• /status - 检查集群健康度`;
+      const helpMsg = "🤖 *Multi-Agent 系统指挥部 (v3.0.2)*\n\n" +
+                      "📋 *任务管理*\n" +
+                      "• /tasks [skill] - 查看待办 (可选技能过滤)\n" +
+                      "• /task <id> - 查看任务详情\n" +
+                      "• /summary - 任务进展总览\n" +
+                      "• /new <标题> - 快速发布原子任务\n" +
+                      "• /broadcast <内容> - 全员广播指令\n\n" +
+                      "👥 *智能体管理*\n" +
+                      "• /agents - 查看当前在线名册\n" +
+                      "• /bootstrap - 获取引导接入命令\n\n" +
+                      "⚙️ *系统监控*\n" +
+                      "• /status - 检查集群健康度";
       await sendTelegramMessage(botToken, chatId, helpMsg);
     } 
-
-    // 2. 任务列表 (支持技能过滤)
     else if (command === "/tasks") {
       const skillFilter = args[1];
       const labels = ["task"];
       if (skillFilter) labels.push(`skill/${skillFilter}`);
-
       const { data: issues } = await octokit.rest.issues.listForRepo({
         owner, repo, labels: labels.join(","), state: "open", per_page: 10
       });
-
       if (issues.length === 0) {
-        await sendTelegramMessage(botToken, chatId, `📭 暂无待办任务${skillFilter ? ` (技能: ${skillFilter})` : ""}`);
+        await sendTelegramMessage(botToken, chatId, "📭 暂无待办任务");
       } else {
-        let taskList = `📋 *待办任务列表*${skillFilter ? ` (${skillFilter})` : ""}:\n\n`;
+        let taskList = "📋 *待办任务列表*:\n\n";
         issues.forEach(issue => {
           taskList += `• [#${issue.number}](${issue.html_url}) ${issue.title}\n`;
         });
         await sendTelegramMessage(botToken, chatId, taskList);
       }
     }
-
-    // 3. 查看具体任务详情
     else if (command === "/task") {
       const issueNumber = parseInt(args[1]);
-      if (isNaN(issueNumber)) {
-        return await sendTelegramMessage(botToken, chatId, "⚠️ 请输入正确的任务编号，如: `/task 42` (Markdown)");
-      }
-
+      if (isNaN(issueNumber)) return await sendTelegramMessage(botToken, chatId, "⚠️ 请输入正确的任务编号");
       const { data: issue } = await octokit.rest.issues.get({ owner, repo, issue_number: issueNumber });
-      
-      const details = `📌 *任务详情 #${issue.number}*\n` +
-                      `*标题*: ${issue.title}\n` +
-                      `*状态*: ${issue.state === "open" ? "🔴 待处理" : "🟢 已关闭"}\n` +
-                      `*标签*: ${issue.labels.map((l: any) => l.name).join(", ")}\n\n` +
-                      `*内容*:\n${issue.body?.substring(0, 500)}${issue.body && issue.body.length > 500 ? "..." : ""}\n\n` +
-                      `🔗 [在 GitHub 中查看](${issue.html_url})`;
+      const details = `📌 *任务详情 #${issue.number}*\n*标题*: ${issue.title}\n*状态*: ${issue.state}\n🔗 [GitHub](${issue.html_url})`;
       await sendTelegramMessage(botToken, chatId, details);
     }
-
-    // 4. 任务总览统计
     else if (command === "/summary") {
       const { data: openTasks } = await octokit.rest.issues.listForRepo({ owner, repo, labels: "task", state: "open" });
       const { data: procTasks } = await octokit.rest.issues.listForRepo({ owner, repo, labels: "task/processing", state: "open" });
-      const { data: doneTasks } = await octokit.rest.issues.listForRepo({ owner, repo, labels: "task/done" });
-
-      const summary = `📊 *系统任务总览*\n\n` +
-                      `• 🔴 *待处理 (Todo)*: ${openTasks.length} 个\n` +
-                      `• 🔵 *执行中 (Doing)*: ${procTasks.length} 个\n` +
-                      `• 🟢 *已完成 (Done)*: ${doneTasks.length} 个\n\n` +
-                      `💪 协作效率正在稳步提升中！`;
+      const summary = `📊 *系统任务总览*\n• 🔴 待处理: ${openTasks.length}\n• 🔵 执行中: ${procTasks.length}`;
       await sendTelegramMessage(botToken, chatId, summary);
     }
-
-    // 5. 快速创建任务
     else if (command === "/new") {
       const title = args.slice(1).join(" ");
-      if (!title) return await sendTelegramMessage(botToken, chatId, "⚠️ 请输入任务标题，如: `/new 调研 AI 趋势` (Markdown)");
-
-      const { data: newIssue } = await octokit.rest.issues.create({
-        owner, repo, title, body: "Task created via Telegram Bot.", labels: ["task", "priority/P2"]
-      });
-
-      await sendTelegramMessage(botToken, chatId, `✅ *任务创建成功!*\n\n[#${newIssue.number}](${newIssue.html_url}) ${newIssue.title}`);
+      if (!title) return await sendTelegramMessage(botToken, chatId, "⚠️ 请输入标题");
+      const { data: newIssue } = await octokit.rest.issues.create({ owner, repo, title, labels: ["task"] });
+      await sendTelegramMessage(botToken, chatId, `✅ 任务创建成功: #${newIssue.number}`);
     }
-
-    // 5.1 全员广播 (同步至所有 Agent)
     else if (command === "/broadcast") {
       const content = args.slice(1).join(" ");
-      if (!content) return await sendTelegramMessage(botToken, chatId, "⚠️ 请输入广播内容，如: `/broadcast 请更新系统` (Markdown)");
-
+      if (!content) return await sendTelegramMessage(botToken, chatId, "⚠️ 请输入广播内容");
       const { data: newIssue } = await octokit.rest.issues.create({
-        owner, repo, 
-        title: `[BROADCAST] ${content.substring(0, 30)}...`, 
-        body: `📢 **全员广播指令**\n\n**发起人**: 指挥官\n**内容**: ${content}\n\n请所有 Agent (@agent/all) 确认收到并执行相关操作。`, 
-        labels: ["task", "priority/P1", "skill/all"]
+        owner, repo, title: `[BROADCAST] ${content.substring(0, 30)}`,
+        body: `📢 **广播**: ${content}\n请所有 Agent 确认回复。`,
+        labels: ["task", "skill/all"]
       });
-
-      await sendTelegramMessage(botToken, chatId, `📢 *广播已发布!*\n\n任务已创建并同步给所有智能体: [#${newIssue.number}](${newIssue.html_url})`);
+      await sendTelegramMessage(botToken, chatId, `📢 广播已发布: #${newIssue.number}`);
     }
-
-    // 6. 查看智能体名册
     else if (command === "/agents") {
-      try {
-        const { data }: any = await octokit.rest.repos.getContent({ owner, repo, path: "agents.json" });
-        const config = JSON.parse(Buffer.from(data.content, "base64").toString());
-        
-        let agentList = "👥 *当前智能体名册*\n\n";
-        config.agents.forEach((a: any) => {
-          agentList += `• *${a.name}* (${a.framework})\n  └ 角色: ${a.role}\n`;
-        });
-        await sendTelegramMessage(botToken, chatId, agentList);
-      } catch (e) {
-        await sendTelegramMessage(botToken, chatId, "⚠️ 无法读取名册文件 `agents.json`。");
-      }
+      const { data }: any = await octokit.rest.repos.getContent({ owner, repo, path: "agents.json" });
+      const config = JSON.parse(Buffer.from(data.content, "base64").toString());
+      let agentList = "👥 *智能体名册*\n\n";
+      config.agents.forEach((a: any) => { agentList += `• *${a.name}*\n`; });
+      await sendTelegramMessage(botToken, chatId, agentList);
     }
-
-    // 7. 引导接入
     else if (command === "/bootstrap") {
-      const baseUrl = `https://${req.headers.get("host")}`;
-      const cmd = "```bash\n" +
-                  `curl -sSL ${baseUrl}/bootstrap.sh | bash -s -- $GITHUB_TOKEN "executor"\n` +
-                  "```";
-      await sendTelegramMessage(botToken, chatId, `🚀 *Agent 引导接入命令:*\n\n请在 Agent 端执行：\n${cmd}`);
+      const host = req.headers.get("host") || "multi-agent-task-dashboard.vercel.app";
+      const cmd = "```bash\ncurl -sSL https://" + host + "/bootstrap.sh | bash -s -- $GITHUB_TOKEN \"executor\"\n```";
+      await sendTelegramMessage(botToken, chatId, "🚀 *引导接入:*\n\n" + cmd);
     }
-
-    // 8. 健康检查
     else if (command === "/status") {
-      const statusMsg = `✅ *集群健康状态报告*\n\n` +
-                        `• 控制面板: 正常 (Online)\n` +
-                        `• 事件总线: 已挂载 (Active)\n` +
-                        `• 数据源: ${owner}/${repo}\n` +
-                        `• 时间: ${new Date().toLocaleString()}`;
-      await sendTelegramMessage(botToken, chatId, statusMsg);
+      await sendTelegramMessage(botToken, chatId, "✅ *系统状态*: 正常\n时间: " + new Date().toLocaleString());
     }
 
     return NextResponse.json({ ok: true });
   } catch (error: any) {
-    console.error("[TG Bot Error]", error.message);
+    console.error("[TG Bot Error]", error);
+    try {
+      await sendTelegramMessage(botToken, chatId, "⚠️ *系统错误*:\n`" + error.message + "`");
+    } catch (e) { console.error(e); }
     return NextResponse.json({ ok: true });
   }
 }
