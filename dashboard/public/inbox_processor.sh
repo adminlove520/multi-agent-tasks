@@ -41,6 +41,8 @@ fi
 
 # 3. 深度实时扫描 (作为兜底)
 echo "🕵️ [3/3] Scanning real-time Issues list..."
+
+# 3.1 扫描专属任务
 gh issue list --label "$MY_ROLE_LABEL" --label "task" --state open --json number,title,url --limit 10 | jq -c ".[]" | while read -r issue; do
   NUMBER=$(echo "$issue" | jq -r '.number')
   TITLE=$(echo "$issue" | jq -r '.title')
@@ -50,6 +52,23 @@ gh issue list --label "$MY_ROLE_LABEL" --label "task" --state open --json number
   echo "📌 AVAILABLE TASK #$NUMBER: $TITLE"
   echo "🔗 $URL"
   echo "👉 Action: Run 'gh issue edit $NUMBER --add-label \"task/processing,$IDENTITY_LABEL\" --remove-label \"task\"' to claim."
+done
+
+# 3.2 扫描全员广播 (Broadcast)
+echo "📢 Checking for global broadcasts..."
+gh issue list --label "skill/all" --label "task" --state open --json number,title,url --limit 5 | jq -c ".[]" | while read -r issue; do
+  NUMBER=$(echo "$issue" | jq -r '.number')
+  TITLE=$(echo "$issue" | jq -r '.title')
+  
+  # 检查是否已经 ACK 过
+  ALREADY_ACK=$(gh issue view $NUMBER --json comments --jq ".comments[] | select(.body | contains(\"[$AGENT_NAME] [ACK]\"))" | wc -l)
+  
+  if [ "$ALREADY_ACK" -eq "0" ]; then
+    echo "------------------------------------------------"
+    echo "🚨 NEW BROADCAST #$NUMBER: $TITLE"
+    echo "👉 Auto-ACKing for $AGENT_NAME..."
+    gh issue comment $NUMBER --body "[$AGENT_NAME] [ACK]: 收到全员指令，正在同步执行。"
+  fi
 done
 
 echo "===================================================="
