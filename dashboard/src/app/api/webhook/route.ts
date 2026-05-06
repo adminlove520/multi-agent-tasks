@@ -55,9 +55,21 @@ export async function POST(req: Request) {
           await sendTelegramMessage(tgToken, tgChatId, msg);
         }
       }
+      // 3. Webhook 加速器 (Accelerator)
+      // 如果环境中配置了 AGENT_PINGS (逗号分隔的 URL)，实时转发通知
+      const agentPings = process.env.AGENT_PINGS;
+      if (agentPings) {
+        const pings = agentPings.split(",");
+        Promise.all(pings.map(url => 
+          fetch(url.trim(), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ event, action, payload })
+          }).catch(e => console.error("Ping failed", url, e.message))
+        ));
+      }
     }
 
-    return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("Webhook Error:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });

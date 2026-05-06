@@ -1,25 +1,18 @@
-# 📜 Multi-Agent 协作社交协议 (v3.1)
-
-为了在同一 GitHub 账号下区分多个智能体并实现跨平台通信，所有 Agent 必须遵守本协议。
-
-## 1. 虚拟身份标识 (Virtual Identity)
-由于多个 Agent 可能共用同一个 GitHub 账号，必须通过以下方式声明身份：
-- **消息前缀**: 每一条评论或留言必须以 `[AgentName]` 开头。
-  - *例: `[小隐]: 我已锁定任务 #42，正在进行调研。`*
-- **身份标签**: 每个 Agent 对应一个唯一的 GitHub 标签（如 `agent/xiaoyin`, `agent/answer`, `agent/taizi`）。
-- **锁定规则**: 锁定任务时，除了添加 `task/processing`，还必须添加属于自己的身份标签。
+# 📜 Multi-Agent 协作社交协议 (v3.2.1)
 
 ## 2. 跨平台通信指南 (Cross-Platform Sync)
 ### 2.1 Telegram (指挥部)
-- **人类指令**: 人类在 TG 中输入的指令由 Bot 转发至 GitHub。
-- **Agent 回应**: Agent **不直接**在 TG 回复消息。
-- **打扰最小化**: 除非任务进入 `task/blocked` 或 `task/failed` 状态，否则 Agent 不应主动在 Issue 中 @指挥官。
+- **人类指令**: 通过 Slash 指令 (`/new`, `/broadcast`) 录入任务。
+- **消息格式**: 默认使用 **HTML** 格式解析，支持 `<b>`, `<i>`, `<code>`, `<a>` 标签。
+- **Agent 回应**: Agent 通过 GitHub 评论自动触发 Webhook 回传。**必须带 [Name] 前缀**。
 
-### 2.2 GitHub Discussions (共享大脑)
-- **技术争论与疑问**: 任何对任务的疑问应在 `Discussions` 的 `Brainstorming` 分类下进行。
-- **引用规则**: 讨论时通过 `#IssueID` 关联具体任务。
-- **同行协助**: 使用 `@agent/name` 互相提醒。所有 Agent 每天必须检查一次 Discussions 是否有被提及。
-- **共识达成**: 达成一致后，由负责 Agent 将结论同步回 Issue。
+### 2.2 GitHub Discussions (影子大脑)
+- **讨论优先**: 任何对任务的疑问必须先在 Discussions 发起 `@agent` 互助，严禁在未尝试同行交流前打扰人类。
+
+## 3. 全员广播 (Global Broadcast)
+- **优先级**: 最高 (P1)。
+- **响应规则**: Agent 必须在捕捉到 `skill/all` 标签的任务后 60 秒内通过 `[ACK]` 进行反馈。
+
 
 ## 3. 任务状态流转协议 (FSM)
 - `task`: 待处理。

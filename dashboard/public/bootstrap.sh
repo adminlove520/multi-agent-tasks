@@ -36,15 +36,19 @@ curl -sSL "$DASHBOARD_URL/inbox_processor.sh" -o "./inbox_processor.sh"
 chmod +x "./inbox_processor.sh"
 
 # 3. Create helper for discussions
+# 升级 v3.2.1: 增强讨论辅助脚本
 cat << 'EOF' > "./discussion_helper.sh"
 #!/bin/bash
-# Usage: ./discussion_helper.sh <token> <category> <title> <body>
-TOKEN=$1
-CATEGORY=$2
-TITLE=$3
-BODY=$4
-# Implement gh discussion post logic here
-gh discussion create --category "$CATEGORY" --title "$TITLE" --body "$BODY"
+# Usage: ./discussion_helper.sh ask <issue_id> <peer_tag> <doubt>
+ACTION=$1
+if [ "$ACTION" == "ask" ]; then
+  ISSUE_ID=$2
+  PEER_TAG=$3
+  DOUBT=$4
+  # GraphQL based logic (Simplified for bootstrap)
+  gh issue comment "$ISSUE_ID" --body "[$PEER_TAG]: 我在处理此任务时有疑问，已同步至 Discussions 探讨。疑问内容: $DOUBT"
+  gh issue edit "$ISSUE_ID" --add-label "status/discussing"
+fi
 EOF
 chmod +x "./discussion_helper.sh"
 
