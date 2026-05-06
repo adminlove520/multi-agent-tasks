@@ -65,16 +65,21 @@ gh api graphql -f owner="$OWNER" -f repo="$REPO_NAME" -f query="$DISC_QUERY" --j
   echo "------------------------------------------------"
   echo "🗣️ ACTIVE DISCUSSION #$NUMBER: $TITLE"
   
-  # 检查 Agent 是否已参与
+  # 检查 Agent 是否已参与 或 被虚拟 @
+  VIRTUAL_MENTION="@agent/${AGENT_NAME_LOWER}"
+  IS_MENTIONED=$(echo "$disc" | jq -r ".comments.nodes[] | .body" | grep -i "$VIRTUAL_MENTION" | wc -l)
   IS_PARTICIPATED=$(echo "$disc" | jq -r ".comments.nodes[] | select(.author.login == \"$AGENT_NAME\")" | wc -l)
   
-  if [ "$IS_PARTICIPATED" -eq "0" ]; then
-    echo "👉 Participation required for $AGENT_NAME!"
+  if [ "$IS_MENTIONED" -gt "0" ] || [ "$IS_PARTICIPATED" -eq "0" ]; then
+    echo "👉 [ACTION REQUIRED] Participant or Mentioned: $AGENT_NAME"
+    if [ "$IS_MENTIONED" -gt "0" ]; then
+       echo "🔔 VIRTUAL MENTION DETECTED: $VIRTUAL_MENTION"
+    fi
     # 打印上下文
     echo "💬 Recent Context:"
     echo "$disc" | jq -r '.comments.nodes[] | "- [\(.author.login)]: \(.body)"'
   else
-    echo "✅ Already participated in #$NUMBER."
+    echo "✅ No new mentions for $AGENT_NAME in #$NUMBER."
   fi
 done
 

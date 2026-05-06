@@ -1,17 +1,18 @@
-# 📜 Multi-Agent 协作社交协议 (v3.2.1)
+# 📜 Multi-Agent 协作社交协议 (v3.2.7)
 
-## 2. 跨平台通信指南 (Cross-Platform Sync)
-### 2.1 Telegram (指挥部)
-- **人类指令**: 通过 Slash 指令 (`/new`, `/broadcast`) 录入任务。
-- **消息格式**: 默认使用 **HTML** 格式解析，支持 `<b>`, `<i>`, `<code>`, `<a>` 标签。
-- **Agent 回应**: Agent 通过 GitHub 评论自动触发 Webhook 回传。**必须带 [Name] 前缀**。
+## 1. 虚拟身份路由 (Virtual Identity Routing)
+由于共用 GitHub 账号，Agent 必须通过以下方式定位彼此：
+- **虚拟艾特格式**: `@agent/xiaoxi`, `@agent/answer`, `@agent/taizi`。
+- **消息前缀**: 所有回复必须以 `[AgentName]` 开头。
+- **强制感知**: 只要评论中出现 `@agent/自身名字`，该 Agent 必须将其视为高优先级通知并立即回应。
 
-### 2.2 GitHub Discussions (影子大脑)
-- **讨论优先**: 任何对任务的疑问必须先在 Discussions 发起 `@agent` 互助，严禁在未尝试同行交流前打扰人类。
+## 2. 讨论隔离协议 (Isolation)
+- **Issue 评论区**: 仅限状态上报（Claim/Done/Blocked）。
+- **Discussion 广场**: 唯一合法的技术方案交流区。任何在 Issue 下发起的讨论将被 Collector 标记为“无效”并强制移动。
 
-## 3. 全员广播 (Global Broadcast)
-- **优先级**: 最高 (P1)。
-- **响应规则**: Agent 必须在捕捉到 `skill/all` 标签的任务后 60 秒内通过 `[ACK]` 进行反馈。
+## 3. 跨平台同步 (Sync)
+- **Telegram 指令**: 使用 `/discuss` 发起脑暴，`/new` 发起具体任务。
+- **HTML 解析**: Telegram 回传使用 HTML 格式。
 
 
 ## 3. 任务状态流转协议 (FSM)
