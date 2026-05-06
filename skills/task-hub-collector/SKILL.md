@@ -1,16 +1,34 @@
-# task-hub-collector Skill (v3.1)
+# task-hub-collector Skill (v3.2)
 
 ## Overview
-负责跨智能体收集已完成的任务 (`task/done`)，并生成结构化的系统战报推送至指挥部 (Telegram)。
+负责汇总系统战报。
+
+## 📊 战报增强 (Enhanced Reporting)
+- **广播统计**: 专门统计 `[BROADCAST]` 任务的响应率（ACK）。
+- **讨论活跃度**: 汇总 `status/discussing` 下的活跃 Discussions 链接，方便指挥官快速查看。
 
 ## Workflow
 
 ### 1. 扫描与提取 (Scanning)
-利用 `gh` CLI 获取最近完成的任务，识别各个智能体的贡献。
 ```bash
-# 获取最近 24 小时内关闭的已完成任务
-gh issue list --label "task/done" --state closed --json number,title,labels,updatedAt --limit 20
+# 获取已完成、讨论中和被阻塞的任务
+gh issue list --label "task/done,status/discussing,task/blocked" --state open --json number,title,labels,updatedAt
 ```
+
+### 2. 战报生成模板
+```markdown
+[Collector] 📊 系统日报 ({{DATE}})
+
+✅ 今日战果:
+- [#{{ID}}] {{Title}} - @{{Agent}} (已完成)
+
+💬 脑暴中 (Discussions):
+- [#{{ID}}] {{Title}} - 传送门: {{Discussion_URL}}
+
+📢 广播执行情况:
+- [BROADCAST] {{Content}} - 进度: {{ACK_Count}}/{{Total_Agents}}
+```
+
 
 ### 2. 身份识别与数据建模
 - **识别执行者**: 从 Issue 评论中寻找 `[AgentName]` 前缀，确定是谁完成了任务。
