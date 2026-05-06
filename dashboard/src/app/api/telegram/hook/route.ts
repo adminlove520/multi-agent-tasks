@@ -23,12 +23,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-    const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN || process.env.GITHUB_SECRET });
+  const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN || process.env.GITHUB_SECRET });
 
+  try {
     const { owner, repo } = await getRepoInfo(octokit);
-
-    try {
-      // --- 命令解析 (支持 /command@botname) ---
+    // --- 命令解析 (支持 /command@botname) ---
 
     const args = rawText.split(" ");
     const fullCommand = args[0].toLowerCase();
