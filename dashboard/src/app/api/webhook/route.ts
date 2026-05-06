@@ -20,22 +20,40 @@ export async function POST(req: Request) {
     
     // ... (Event processing code remains)
 
-    // 📩 追加通知逻辑：如果是 Issue 或 Discussion，发送 TG 提醒
+    // 📩 追加通知逻辑：同步 GitHub 动态到 Telegram
     const tgToken = process.env.TELEGRAM_BOT_TOKEN;
     const tgChatId = process.env.TELEGRAM_CHAT_ID;
 
-    if (tgToken && tgChatId && ["issues", "discussion"].includes(event!)) {
+    if (tgToken && tgChatId) {
       const action = payload.action;
-      if (action === "opened" || action === "created") {
+      
+      // 1. 新任务/新讨论通知
+      if (["issues", "discussion"].includes(event!) && (action === "opened" || action === "created")) {
         const title = payload.issue?.title || payload.discussion?.title;
         const sender = payload.sender.login;
         const url = payload.issue?.html_url || payload.discussion?.html_url;
 
-        const msg = `🚀 *New Task in ${repo}*\n\n` +
-                    `📌 *Title*: ${title}\n` +
-                    `👤 *From*: ${sender}\n` +
-                    `🔗 [View on GitHub](${url})`;
+        const msg = `🚀 <b>New Entry in ${repo}</b>\n\n` +
+                    `📌 <b>Title</b>: ${title}\n` +
+                    `👤 <b>From</b>: ${sender}\n` +
+                    `🔗 <a href="${url}">View on GitHub</a>`;
         await sendTelegramMessage(tgToken, tgChatId, msg);
+      }
+
+      // 2. 智能体回复通知 (Issue Comment)
+      if (event === "issue_comment" && action === "created") {
+        const body = payload.comment.body as string;
+        const sender = payload.sender.login;
+        const issueTitle = payload.issue.title;
+
+        // 只有包含 [Name] 前缀的评论（说明是 Agent 回复）才转发到 TG，防止普通操作干扰
+        if (body.startsWith("[") && body.includes("]")) {
+          const msg = `💬 <b>Agent Response</b>\n` +
+                      `📌 <b>Task</b>: ${issueTitle}\n` +
+                      `👤 <b>Sender</b>: ${sender}\n\n` +
+                      `${body}`;
+          await sendTelegramMessage(tgToken, tgChatId, msg);
+        }
       }
     }
 
