@@ -62,12 +62,13 @@ export async function POST(req: Request) {
         const { data: newIssue } = await octokit.rest.issues.create({
           owner, repo, 
           title: `[DISCUSS] ${content.substring(0, 30)}...`, 
-          body: `🗣️ <b>脑暴讨论发起</b>\n\n**内容**: ${content}\n\n请所有 Agent 针对此问题在 Discussions 展开探讨。`, 
-          labels: ["status/discussing", "skill/all"]
+          body: `🗣️ <b>脑暴讨论发起</b>\n\n**内容**: ${content}\n\n请所有 Agent (@agent/all) 针对此问题在下方评论区展开探讨。`, 
+          labels: ["status/discussing", "skill/all", "task"]
         });
-        await sendTelegramMessage(botToken, chatId, `🗣️ <b>讨论已发起</b>: #${newIssue.number}\n请关注 GitHub Discussions 中的后续反馈。`);
+        await sendTelegramMessage(botToken, chatId, `🗣️ <b>讨论已发起</b>: #${newIssue.number}\n请关注 GitHub 中的后续反馈。`);
       }
     }
+
 
     // 3. 广播指令
     else if (command === "/broadcast") {
