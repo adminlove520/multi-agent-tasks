@@ -43,44 +43,45 @@ gh discussion list --category "Brainstorming" --limit 10 --json title,body,comme
 # 4. 深度实时扫描 (Atomic Locking 增强)
 echo "🕵️ [4/4] Scanning real-time Issues list..."
 
-# 4.1 扫描专属任务
-gh issue list --label "$MY_ROLE_LABEL" --label "task" --state open --json number,title,url --limit 10 | jq -c ".[]" | while read -r issue; do
+# 4.1 扫描任务 (包含专属任务 和 全员广播)
+# 使用逗号分隔标签表示 AND，我们需要分别拉取再合并，或者拉取所有 task 再过滤
+echo "🔍 Searching for $MY_ROLE_LABEL OR skill/all tasks..."
+
+gh issue list --label "task" --state open --json number,title,labels --limit 20 | jq -c ".[]" | while read -r issue; do
   NUMBER=$(echo "$issue" | jq -r '.number')
   TITLE=$(echo "$issue" | jq -r '.title')
+  LABELS=$(echo "$issue" | jq -r '.labels[].name')
   
-  # 原子锁定检查：检查是否已被锁定或已有人开始评论
-  IS_LOCKED=$(gh issue view $NUMBER --json labels --jq ".labels[] | select(.name | startswith(\"agent/\"))" | wc -l)
+  # 判断是否匹配角色或全员广播
+  MATCH=0
+  if echo "$LABELS" | grep -q "$MY_ROLE_LABEL"; then MATCH=1; fi
+  if echo "$LABELS" | grep -q "skill/all"; then MATCH=1; fi
   
-  if [ "$IS_LOCKED" -eq "0" ]; then
-    echo "------------------------------------------------"
-    echo "📌 CLAIMING TASK #$NUMBER: $TITLE"
-    # 原子锁定：立即添加身份标签并留言
-    gh issue edit $NUMBER --add-label "task/processing,$IDENTITY_LABEL" --remove-label "task"
-    gh issue comment $NUMBER --body "[$AGENT_NAME]: 🔒 任务已锁定，正在根据最新的 PROTOCOL.md 执行。如有疑问将转向 Discussions。"
+  if [ "$MATCH" -eq "1" ]; then
+    # 原子锁定检查
+    IS_CLAIMED_BY_ME=$(gh issue view $NUMBER --json labels --jq ".labels[] | select(.name == \"$IDENTITY_LABEL\")" | wc -l)
     
-    # 这里进入实际执行逻辑...
-  else
-    echo "⏭️ Skipping Task #$NUMBER (Already claimed by another agent)"
+    if [ "$IS_CLAIMED_BY_ME" -eq "0" ]; then
+      echo "------------------------------------------------"
+      echo "🚨 NEW TASK/BROADCAST #$NUMBER: $TITLE"
+      
+      # 如果是全员广播，自动回复 ACK 并添加身份标签
+      if echo "$LABELS" | grep -q "skill/all"; then
+        echo "📢 Global Broadcast detected. Auto-ACKing..."
+        gh issue edit $NUMBER --add-label "$IDENTITY_LABEL"
+        gh issue comment $NUMBER --body "[$AGENT_NAME] [ACK]: 收到全员指令，正在同步执行。"
+      else
+        # 如果是专属任务，正常锁定
+        echo "📌 Claiming Private Task..."
+        gh issue edit $NUMBER --add-label "task/processing,$IDENTITY_LABEL" --remove-label "task"
+        gh issue comment $NUMBER --body "[$AGENT_NAME]: 🔒 任务已锁定，正在执行。"
+      fi
+    else
+      echo "✅ Task #$NUMBER already acknowledged by $AGENT_NAME."
+    fi
   fi
 done
 
-
-# 3.2 扫描全员广播 (Broadcast)
-echo "📢 Checking for global broadcasts..."
-gh issue list --label "skill/all" --label "task" --state open --json number,title,url --limit 5 | jq -c ".[]" | while read -r issue; do
-  NUMBER=$(echo "$issue" | jq -r '.number')
-  TITLE=$(echo "$issue" | jq -r '.title')
-  
-  # 检查是否已经 ACK 过
-  ALREADY_ACK=$(gh issue view $NUMBER --json comments --jq ".comments[] | select(.body | contains(\"[$AGENT_NAME] [ACK]\"))" | wc -l)
-  
-  if [ "$ALREADY_ACK" -eq "0" ]; then
-    echo "------------------------------------------------"
-    echo "🚨 NEW BROADCAST #$NUMBER: $TITLE"
-    echo "👉 Auto-ACKing for $AGENT_NAME..."
-    gh issue comment $NUMBER --body "[$AGENT_NAME] [ACK]: 收到全员指令，正在同步执行。"
-  fi
-done
 
 echo "===================================================="
 echo "✅ Scan complete. If no tasks found, standby or check Discussions."
