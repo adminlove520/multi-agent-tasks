@@ -39,7 +39,11 @@ gh issue edit <ID> --add-label "task/processing,agent/{{AGENT_NAME_LOWER}}" --re
 - **状态流转**: 完成后执行 `gh issue edit <ID> --add-label "task/done" --remove-label "task/processing"`。
 
 ## 🛡️ 异常处理 (Error Handling)
-- **被阻塞**: 如果缺少权限或信息，标记 `task/blocked` 并在评论区 @指挥官 (Commander)。
+- **有疑问/信息缺失**: 严禁在未尝试同行交流前直接 @指挥官。
+  - **操作**: 将 Issue 标记为 `status/discussing`。
+  - **转移**: 运行 `./discussion_helper.sh post "Brainstorming" "[ISSUE #ID] 技术方案探讨" "我在执行此任务时遇到... @agent/{{OTHER_AGENT_TAG}} 请协助探讨。"`
+  - **闭环**: 在讨论达成共识后，由你总结结论并贴回原 Issue，然后移回 `task/processing` 继续执行。
+- **被阻塞**: 只有在 Discussions 尝试 2 次以上仍无法解决，或由于环境权限导致无法进行时，标记 `task/blocked` 并 @指挥官。
 - **失败**: 如果任务无法完成，标记 `task/failed` 并提供完整的错误日志。
 
 ## 🗣️ 沟通风格

@@ -12,13 +12,23 @@
 ## 2. 跨平台通信指南 (Cross-Platform Sync)
 ### 2.1 Telegram (指挥部)
 - **人类指令**: 人类在 TG 中输入的指令由 Bot 转发至 GitHub。
-- **Agent 回应**: Agent **不直接**在 TG 回复消息（因为 Bot 无法看到其他 Bot 的消息）。
-- **同步链**: Agent 留言 GitHub -> Webhook 触发 -> TG Bot 发送通知。
+- **Agent 回应**: Agent **不直接**在 TG 回复消息。
+- **打扰最小化**: 除非任务进入 `task/blocked` 或 `task/failed` 状态，否则 Agent 不应主动在 Issue 中 @指挥官。
 
 ### 2.2 GitHub Discussions (共享大脑)
-- **技术争论**: 复杂的方案讨论应在 `Discussions` 的 `Brainstorming` 分类下进行。
+- **技术争论与疑问**: 任何对任务的疑问应在 `Discussions` 的 `Brainstorming` 分类下进行。
 - **引用规则**: 讨论时通过 `#IssueID` 关联具体任务。
-- **共识达成**: 讨论达成一致后，由负责该任务的 Agent 将结论同步回 Issue。
+- **同行协助**: 使用 `@agent/name` 互相提醒。所有 Agent 每天必须检查一次 Discussions 是否有被提及。
+- **共识达成**: 达成一致后，由负责 Agent 将结论同步回 Issue。
+
+## 3. 任务状态流转协议 (FSM)
+- `task`: 待处理。
+- `task/processing`: 处理中 (须带 `agent/name` 标签)。
+- `status/discussing`: 讨论中 (存在疑问，已转移至 Discussions)。
+- `task/done`: 已完成。
+- `task/blocked`: 被阻塞 (外部权限/环境问题，需人类介入)。
+- `task/failed`: 失败。
+
 
 ## 3. 冲突解决机制
 - **抢单冲突**: 若两个 Agent 同时尝试锁定任务，以 GitHub 标签操作的先后顺序为准。第二个 Agent 发现标签已变为 `task/processing` 且存在他人身份标签时，必须立即退出。

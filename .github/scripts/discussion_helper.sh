@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Multi-Agent Task Hub - Discussion Helper (GraphQL Edition)
+
 # 获取 Repository ID
 get_repo_id() {
   gh api graphql -f query='
@@ -10,7 +12,7 @@ get_repo_id() {
     }' -F owner="$1" -F name="$2" --jq '.data.repository.id'
 }
 
-# 获取 Category ID
+# 获取所有 Category 并匹配
 get_category_id() {
   gh api graphql -f query='
     query($owner:String!, $name:String!) {
@@ -42,18 +44,73 @@ create_discussion() {
     }' -F repoId="$REPO_ID" -F categoryId="$CATEGORY_ID" -F title="$TITLE" -F body="$BODY"
 }
 
+# 搜索相关的 Discussion (参考 openclaw-qa 的知识检索逻辑)
+search_discussions() {
+  QUERY=$1
+  gh api graphql -f query='
+    query($owner:String!, $name:String!, $query:String!) {
+      repository(owner:$owner, name:$name) {
+        discussions(first:5, text:$query) {
+          nodes {
+            title
+            url
+            body
+            category { name }
+          }
+        }
+      }
+    }' -F owner="$2" -F name="$3" -F query="$QUERY"
+}
+
+# 存储记忆 (Store to Shared Brain)
+store_memory() {
+  OWNER=$(echo $GITHUB_REPOSITORY | cut -d'/' -f1)
+  REPO_NAME=$(echo $GITHUB_REPOSITORY | cut -d'/' -f2)
+  REPO_ID=$(get_repo_id "$OWNER" "$REPO_NAME")
+  
+  # 优先寻找 "Show and tell" 或 "General" 作为记忆分区
+  CAT_ID=$(get_category_id "$OWNER" "$REPO_NAME" "Show and tell")
+  [ -z "$CAT_ID" ] && CAT_ID=$(get_category_id "$OWNER" "$REPO_NAME" "General")
+  
+  create_discussion "$REPO_ID" "$CAT_ID" "[MEMO] $1" "$2"
+}
+
+# 任务转向讨论 (Move Issue to Discussion)
+move_to_discussion() {
+  ISSUE_ID=$1
+  PEER_TAG=$2
+  DOUBT=$3
+  
+  OWNER=$(echo $GITHUB_REPOSITORY | cut -d'/' -f1)
+  REPO_NAME=$(echo $GITHUB_REPOSITORY | cut -d'/' -f2)
+  REPO_ID=$(get_repo_id "$OWNER" "$REPO_NAME")
+  CAT_ID=$(get_category_id "$OWNER" "$REPO_NAME" "Brainstorming")
+  [ -z "$CAT_ID" ] && CAT_ID=$(get_category_id "$OWNER" "$REPO_NAME" "General")
+  
+  BODY="### 关联任务: #$ISSUE_ID\n\n**提问人**: @$(gh api user --jq '.login')\n**被邀请同行**: @$PEER_TAG\n\n**疑问详情**:\n$DOUBT"
+  
+  create_discussion "$REPO_ID" "$CAT_ID" "Help Needed for Issue #$ISSUE_ID" "$BODY"
+}
+
 case "$1" in
   "post")
     OWNER=$(echo $GITHUB_REPOSITORY | cut -d'/' -f1)
     REPO_NAME=$(echo $GITHUB_REPOSITORY | cut -d'/' -f2)
     REPO_ID=$(get_repo_id "$OWNER" "$REPO_NAME")
     CAT_ID=$(get_category_id "$OWNER" "$REPO_NAME" "$2")
-    
-    if [ -z "$CAT_ID" ]; then
-      echo "Category $2 not found, using first available category."
-      CAT_ID=$(gh api graphql -f query='query($owner:String!, $name:String!) { repository(owner:$owner, name:$name) { discussionCategories(first:1) { nodes { id } } } }' -F owner="$OWNER" -F name="$REPO_NAME" --jq '.data.repository.discussionCategories.nodes[0].id')
-    fi
-    
+    [ -z "$CAT_ID" ] && CAT_ID=$(get_category_id "$OWNER" "$REPO_NAME" "Q&A")
+    [ -z "$CAT_ID" ] && CAT_ID=$(get_category_id "$OWNER" "$REPO_NAME" "General")
     create_discussion "$REPO_ID" "$CAT_ID" "$3" "$4"
+    ;;
+  "ask")
+    move_to_discussion "$2" "$3" "$4"
+    ;;
+  "search"|"recall")
+    OWNER=$(echo $GITHUB_REPOSITORY | cut -d'/' -f1)
+    REPO_NAME=$(echo $GITHUB_REPOSITORY | cut -d'/' -f2)
+    search_discussions "$2" "$OWNER" "$REPO_NAME"
+    ;;
+  "memo")
+    store_memory "$2" "$3"
     ;;
 esac

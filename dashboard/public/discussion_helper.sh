@@ -75,6 +75,23 @@ store_memory() {
   create_discussion "$REPO_ID" "$CAT_ID" "[MEMO] $1" "$2"
 }
 
+# 任务转向讨论 (Move Issue to Discussion)
+move_to_discussion() {
+  ISSUE_ID=$1
+  PEER_TAG=$2
+  DOUBT=$3
+  
+  OWNER=$(echo $GITHUB_REPOSITORY | cut -d'/' -f1)
+  REPO_NAME=$(echo $GITHUB_REPOSITORY | cut -d'/' -f2)
+  REPO_ID=$(get_repo_id "$OWNER" "$REPO_NAME")
+  CAT_ID=$(get_category_id "$OWNER" "$REPO_NAME" "Brainstorming")
+  [ -z "$CAT_ID" ] && CAT_ID=$(get_category_id "$OWNER" "$REPO_NAME" "General")
+  
+  BODY="### 关联任务: #$ISSUE_ID\n\n**提问人**: @$(gh api user --jq '.login')\n**被邀请同行**: @$PEER_TAG\n\n**疑问详情**:\n$DOUBT"
+  
+  create_discussion "$REPO_ID" "$CAT_ID" "Help Needed for Issue #$ISSUE_ID" "$BODY"
+}
+
 case "$1" in
   "post")
     OWNER=$(echo $GITHUB_REPOSITORY | cut -d'/' -f1)
@@ -84,6 +101,9 @@ case "$1" in
     [ -z "$CAT_ID" ] && CAT_ID=$(get_category_id "$OWNER" "$REPO_NAME" "Q&A")
     [ -z "$CAT_ID" ] && CAT_ID=$(get_category_id "$OWNER" "$REPO_NAME" "General")
     create_discussion "$REPO_ID" "$CAT_ID" "$3" "$4"
+    ;;
+  "ask")
+    move_to_discussion "$2" "$3" "$4"
     ;;
   "search"|"recall")
     OWNER=$(echo $GITHUB_REPOSITORY | cut -d'/' -f1)
