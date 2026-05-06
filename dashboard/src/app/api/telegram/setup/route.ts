@@ -5,19 +5,18 @@ export async function POST(req: Request) {
 
   let botToken = inputToken;
 
-  // 如果是掩码值，尝试从环境变量获取（虽然目前 Vercel 没配，但为了健壮性保留）
-  if (botToken === "********") {
+  // 1. 密钥恢复逻辑：如果前端传的是遮罩值，则从环境变量中取真实密钥
+  if (!botToken || botToken === "********") {
     botToken = process.env.TELEGRAM_BOT_TOKEN;
   }
 
   if (!botToken || botToken === "********") {
-    return NextResponse.json({ error: "Invalid or missing Bot Token. Please re-enter your token." }, { status: 400 });
+    return NextResponse.json({ error: "Token missing. Please enter your Bot Token again." }, { status: 400 });
   }
 
   if (action === "activate_webhook") {
-    // 1. 确定 Webhook URL (使用与 setup 相同的健壮逻辑)
+    // 2. 确定 Webhook URL (适配 Vercel 生产环境)
     let baseUrl = "";
-    
     if (process.env.NEXTAUTH_URL && !process.env.NEXTAUTH_URL.includes("localhost")) {
       baseUrl = process.env.NEXTAUTH_URL;
     } else if (process.env.VERCEL_URL) {
@@ -27,28 +26,33 @@ export async function POST(req: Request) {
       baseUrl = host ? `https://${host}` : "";
     }
 
-    // 去除末尾斜杠
     baseUrl = baseUrl.replace(/\/$/, "");
+    const webhookUrl = `${baseUrl}/api/telegram/hook`.trim();
 
-    if (!baseUrl) {
-      return NextResponse.json({ error: "Could not determine base URL." }, { status: 400 });
-    }
-
-    const webhookUrl = `${baseUrl}/api/telegram/hook`;
-    
-    // 使用 URLSearchParams 确保 URL 被正确编码
-    const params = new URLSearchParams({ url: webhookUrl });
-    const url = `https://api.telegram.org/bot${botToken}/setWebhook?${params.toString()}`;
+    // 3. 调用 Telegram API (改用 POST JSON 格式，避开 URL 编码问题)
+    const tgApiUrl = `https://api.telegram.org/bot${botToken}/setWebhook`;
 
     try {
-      const response = await fetch(url);
+      const response = await fetch(tgApiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: webhookUrl,
+          drop_pending_updates: true,
+          allowed_updates: ["message", "edited_message", "callback_query", "channel_post", "edited_channel_post"]
+        }),
+      });
+
       const data = await response.json();
+      
       if (!data.ok) {
         return NextResponse.json({ 
-          error: data.description,
-          url: webhookUrl 
+          error: data.description, 
+          url: webhookUrl,
+          debug: "Telegram rejected the URL. Ensure the domain is public and HTTPS is valid."
         }, { status: 400 });
       }
+
       return NextResponse.json({ success: true, message: "Webhook activated!", url: webhookUrl });
     } catch (error: any) {
       return NextResponse.json({ error: error.message }, { status: 500 });
