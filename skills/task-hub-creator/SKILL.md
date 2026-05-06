@@ -1,63 +1,27 @@
-# task-hub-creator Skill
+# task-hub-creator Skill (v3.1)
 
 ## Overview
-This skill allows an agent to decompose a high-level goal into actionable tasks and dispatch them as GitHub Issues to a task hub repository.
-
-## Prerequisites
-- GitHub CLI (`gh`) installed and authenticated.
-- Repository set up as the task hub.
+负责目标拆解与原子任务下发，通过看板或命令行向系统注入任务流。
 
 ## Workflow
 
-### 1. Task Decomposition
-When receiving a complex request, break it down into independent, actionable sub-tasks. Each sub-task should have:
-- A clear title.
-- Detailed instructions.
-- A priority (P0, P1, P2).
-- An intended executor label (e.g., `skill/answer`, `skill/taizi`).
+### 1. 目标拆解 (Decomposition)
+将人类的宏观指令拆解为可被单人 Agent 完成的原子任务。
+- **颗粒度**: 每个 Issue 应对应一个明确的交付物。
+- **指派**: 必须附带 `skill/*` 标签以触发对应 Agent。
 
-### 2. Issue Creation
-For each sub-task, create a GitHub Issue using the standard format.
-
-**Command Template:**
+### 2. 发布任务 (Creation)
+使用标准的标签体系发布 Issue。
 ```bash
-gh issue create --title "[TASK] <Title>" --body "<Body Content>" --label "task,priority/<pX>,skill/<executor>" --repo <owner>/<repo>
+gh issue create --title "调研 X 技术方案" \
+  --body "[Creator]: 请调研 X 技术的落地可行性。交付物：Markdown 报告。" \
+  --label "task,priority/P1,skill/research"
 ```
 
-**Body Format:**
-```markdown
-## Task Details
-**Source**: <Agent Name/Identity>
-**Created**: <Timestamp>
-**Priority**: <P0|P1|P2>
+### 3. 监控与督办
+- 监听 `task/blocked` 标签。
+- 发现阻塞时，主动发起 `Discussions` 协调资源。
 
-## Instructions
-<Detailed step-by-step instructions for the executor>
-
-## Context
-<Any necessary background information, links, or file references>
-
-## Acceptance Criteria
-- [ ] Criterion 1
-- [ ] Criterion 2
-```
-
-### 3. Confirmation
-Report the created Issue URLs to the user or the main coordinator.
-
-### 4. Agent Brainstorming (Discussions)
-If a task is too vague or requires multi-agent consensus, initiate a GitHub Discussion instead of an Issue.
-
-**Command:**
-```bash
-gh discussion create --title "[BRAINSTORM] <Topic>" --body "<Context>" --category "Agent Brainstorming" --repo <owner>/<repo>
-```
-
-## Label Schema
-| Label | Meaning |
-|-------|---------|
-| task | New task awaiting processing |
-| priority/p0 | Critical/Urgent |
-| priority/p1 | High priority |
-| priority/p2 | Normal priority |
-| skill/<name> | Targeted executor skill/agent |
+## 协作准则 (Rules)
+- 严禁发布模糊、无法验证的任务。
+- 任务发布后，必须在 GitHub Discussions 对应的话题中留言告知团队背景信息。

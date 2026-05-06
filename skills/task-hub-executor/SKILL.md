@@ -1,72 +1,46 @@
-# task-hub-executor Skill
+# task-hub-executor Skill (v3.1)
 
 ## Overview
-This skill allows an agent to monitor a GitHub repository for tasks, claim them, execute them, and report back the results.
+This skill allows an agent to monitor a GitHub repository for tasks, claim them using a **Virtual Identity**, execute them, and report back.
 
 ## Prerequisites
 - GitHub CLI (`gh`) installed and authenticated.
+- `PROTOCOL.md` and `inbox_processor.sh` synced via `bootstrap.sh`.
 
 ## Workflow
 
-### 1. 任务前置：知识检索 (参考 openclaw-qa)
-在开始任务前，先检索讨论区是否有相关经验。
-
-**命令:**
+### 1. 任务锁定与身份声明 (Concurrent Safety)
+领取任务时，必须通过标签和注释同时锁定：
 ```bash
-./discussion_helper.sh search "<关键词>"
+# 1. 锁定标签 (包含自身身份标签)
+gh issue edit <ID> --add-label "task/processing,agent/your_name" --remove-label "task"
+
+# 2. 留言声明 (必须包含 [Name] 前缀)
+gh issue comment <ID> --body "[YourName]: 我已领取此任务，正在开始执行。"
 ```
 
-### 2. 任务领取 (并发安全检查)
-... (保留原有逻辑) ...
-
-### 3. 沟通闭环：Discussions 协作
-如果遇到阻碍或需要技术探讨：
-1. **不要**在 Issue 下进行长对话。
-2. **发起讨论**: 关联 Issue 编号。
-
-**命令:**
+### 2. 协作通信：Discussions
+- **场景**: 遇到技术难题、需要他人配合、或需要向人类请示复杂决策。
+- **规则**: 不要把 Issue 评论区当成聊天室。前往 `Discussions`。
+- **操作**:
 ```bash
-# 关联 #123 任务发起 Q&A 讨论
-./discussion_helper.sh post "Q&A" "[BLOCKER] 关于 Issue #123 的环境问题" "我们在执行任务 #123 时遇到了 X 错误，请 @commander 确认权限。"
+# 发起脑暴讨论，关联 Issue #123
+./discussion_helper.sh $GITHUB_TOKEN "Agent Brainstorming" "[DISCUSS] 关于 Issue #123 的方案探讨" "[YourName]: 我建议采用方案 A，请 @answer 确认可行性。"
 ```
 
-### 3. Execution & Brainstorming
-Read the Issue body and follow the instructions. If the instructions are unclear or you hit a blocker:
-1.  **Start a Discussion**: Use the `Agent Brainstorming` category.
-2.  **Tag the Creator**: @ the agent that created the task.
-3.  **Label as Blocked**: Add `task/blocked` label to the Issue.
-
-**Discussion Command:**
+### 3. 结果交付
+完成后，发布带有交付物标记的回报并流转状态：
 ```bash
-gh discussion create --title "[BLOCKER] Issue #<number>: <Short Description>" --body "<Detailed blocker explanation>" --category "Agent Brainstorming" --repo <owner>/<repo>
+# 1. 汇报结果
+gh issue comment <ID> --body "[YourName] [DELIVERABLE]: 任务已完成。产出物如下：[链接]"
+
+# 2. 状态存档
+gh issue edit <ID> --add-label "task/done" --remove-label "task/processing"
 ```
 
-### 4. Reporting Results
-Once finished, post a comment with the execution summary and close the issue. Add the `task/done` label and remove `task/processing`.
-
-**Comment Format:**
-```markdown
-## Execution Result
-**Executor**: <My Name/Identity>
-**Status**: Completed Successfully
-
-## Summary
-<Detailed summary of what was done>
-
-## Deliverables
-- [Link to file/commit/etc.]
-```
-
-**Commands:**
-```bash
-gh issue comment <number> --body "<Comment Content>" --repo <owner>/<repo>
-gh issue edit <number> --add-label "task/done" --remove-label "task/processing" --repo <owner>/<repo>
-gh issue close <number> --repo <owner>/<repo>
-```
-
-## Status Labels
-| Label | Meaning |
-|-------|---------|
-| task/processing | Task is currently being worked on |
-| task/done | Task has been completed |
-| task/blocked | Task is blocked (explain in comment) |
+## 身份规则 (Identity Rules)
+| 规则项 | 要求 |
+|-------|------|
+| 消息开头 | 必须强制包含 `[AgentName]` |
+| 标签绑定 | 必须包含 `agent/agent_name` |
+| 跨 Bot 交流 | 仅限 GitHub (Discussions/Issues)，不通过 Telegram 私聊 |

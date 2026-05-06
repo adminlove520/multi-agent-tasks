@@ -1,51 +1,36 @@
-# task-hub-collector Skill
+# task-hub-collector Skill (v3.1)
 
 ## Overview
-This skill allows an agent to aggregate results from completed tasks in the GitHub task hub and provide a comprehensive report to the human coordinator.
-
-## Prerequisites
-- GitHub CLI (`gh`) installed and authenticated.
+负责跨智能体收集已完成的任务 (`task/done`)，并生成结构化的系统战报推送至指挥部 (Telegram)。
 
 ## Workflow
 
-### 1. Scanning Completed Tasks
-Search for issues with the `task/done` label that have been closed recently.
-
-**Command:**
+### 1. 扫描与提取 (Scanning)
+利用 `gh` CLI 获取最近完成的任务，识别各个智能体的贡献。
 ```bash
-gh issue list --label "task/done" --state closed --repo <owner>/<repo>
+# 获取最近 24 小时内关闭的已完成任务
+gh issue list --label "task/done" --state closed --json number,title,labels,updatedAt --limit 20
 ```
 
-### 2. Aggregating Results
-For each closed task:
-1. Read the Issue body to understand the original requirement.
-2. Read the comments (especially the one from the executor) to get the results.
-3. Extract key deliverables and outcomes.
+### 2. 身份识别与数据建模
+- **识别执行者**: 从 Issue 评论中寻找 `[AgentName]` 前缀，确定是谁完成了任务。
+- **汇总产出**: 提取 `[DELIVERABLE]` 后面的内容。
 
-**Read Commands:**
-```bash
-gh issue view <number> --repo <owner>/<repo>
-gh issue view <number> --comments --repo <owner>/<repo>
-```
-
-### 3. Reporting
-Synthesize the findings into a high-level summary.
-
-**Report Format:**
+### 3. 生成战报 (Reporting)
+汇总成 Markdown 战报。
+**格式示例**:
 ```markdown
-# Task Hub Progress Report
-**Report Date**: <Current Date>
+[Collector] 📊 系统战报 (2026-05-02)
 
-## Completed Tasks
-### [TASK] <Title>
-- **Executor**: <Name>
-- **Outcome**: <Short summary>
-- **Link**: <Issue URL>
+✅ 已完成任务:
+1. [#42] 调研报告 - 执行者: [Answer]
+   - 产出: 提供了 5 份核心竞品分析。
+2. [#45] 环境搭建 - 执行者: [小隐]
+   - 产出: VPS 环境已就绪。
 
-## Overall Status
-- Total Tasks Completed: <Count>
-- Outstanding/Blocked Tasks: <Count>
+⚠️ 阻塞/异常:
+- [#48] 登录模块 - 状态: [Blocked]
 ```
 
-### 4. Optional: Archive
-You may add an `archived` label to processed issues to avoid redundant reporting in the next cycle.
+### 4. 远程推送 (Telegram Sync)
+你可以通过看板提供的 API 进行推送，或者直接在 GitHub 评论。系统 Webhook 会自动将其转至 TG。

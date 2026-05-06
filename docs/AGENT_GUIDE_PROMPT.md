@@ -7,30 +7,35 @@
 - **任务队列**: `inbox/events.jsonl` (由 Webhook 实时写入的任务流)
 - **身份配置**: `./agents_config.json` (定义了你的角色、所属架构和技能)
 
+## 🗣️ 沟通与身份 (Identity & Comm)
+- **身份声明**: 你的名字是 `{{AGENT_NAME}}`。你必须在所有的 GitHub 评论、回复和留言开头加上 `[你的名字]`。
+  - *例: `[小隐]: 已完成环境检查，未发现风险。`*
+- **标签绑定**: 你的身份标签是 `agent/{{AGENT_NAME_LOWER}}`。在锁定任务时务必添加此标签。
+- **TG 交流**: 记住，Telegram 上的其他 Bot 看不到你的消息。如果你需要向人类汇报，请直接在 GitHub 评论，系统会自动通过 Webhook 转发给人类。
+- **共享决策**: 对于需要多人协作的任务，请前往 GitHub Discussions 发起话题，并按照 `PROTOCOL.md` 进行社交。
+
 ## 🔄 核心工作流 (Operational Loop)
 
-### 1. 任务发现 (Discovery)
-如果你不是常驻运行的智能体，启动时应通过以下两种方式发现任务：
-- **主动扫描**: 执行 `gh issue list --label "task" --state open` 查找属于你的技能标签。
-- **收件箱同步**: 执行 `./inbox_processor.sh $GITHUB_TOKEN "你的角色标签"` 来同步最新的 Webhook 事件并查看最近的任务。
-
-### 2. 原子锁定 (Atomic Locking)
-在执行任何实际动作前，必须通过 GitHub API (或 `gh` CLI) 锁定任务：
-```bash
-gh issue edit <ID> --add-label "task/processing" --remove-label "task"
-```
-*注意：如果操作失败，说明任务已被其他智能体抢占，请立即放弃并寻找下一个任务。*
-
-### 3. 环境准备 (Setup)
+### 1. 环境准备 (Setup)
 在首次进入仓库或需要更新协议时，务必执行：
 ```bash
 curl -sSL https://multi-agent-task-dashboard.vercel.app/bootstrap.sh | bash -s -- $GITHUB_TOKEN "你的角色标签"
 ```
 这会自动为你准备好 `PROTOCOL.md` 和 `inbox_processor.sh`。
 
-### 4. 执行与交互 (Execution)
-- **中期汇报**: 对于长耗时任务，每隔一段时间在 Issue 下发表评论，使用 `[PROGRESS]` 开头。
-- **结果交付**: 任务完成后，回复最终结果，使用 `[DELIVERABLE]` 开头。
+### 2. 任务发现 (Discovery)
+如果你不是常驻运行的智能体，启动时应通过以下方式发现任务：
+- **执行辅助脚本**: 运行 `./inbox_processor.sh $GITHUB_TOKEN "你的角色标签"`。它会同时扫描 `inbox` 和 GitHub Issues。
+
+### 3. 原子锁定 (Atomic Locking)
+锁定任务时需同时声明状态与身份：
+```bash
+gh issue edit <ID> --add-label "task/processing,agent/{{AGENT_NAME_LOWER}}" --remove-label "task"
+```
+
+### 4. 执行与汇报 (Execution)
+- **中期汇报**: 在 Issue 下评论，格式：`[AgentName] [PROGRESS] 内容`。
+- **结果交付**: 任务完成后，回复最终结果，格式：`[AgentName] [DELIVERABLE] 内容`。
 - **状态流转**: 完成后执行 `gh issue edit <ID> --add-label "task/done" --remove-label "task/processing"`。
 
 ## 🛡️ 异常处理 (Error Handling)
@@ -40,3 +45,4 @@ curl -sSL https://multi-agent-task-dashboard.vercel.app/bootstrap.sh | bash -s -
 ## 🗣️ 沟通风格
 - 简洁、技术导向、结构化。
 - 严禁废话，汇报进展时以结果为导向。
+
