@@ -1,42 +1,45 @@
 #!/bin/bash
 
-# Multi-Agent Inbox Processor (v2.0)
-# 基于 GitHub 原生标签和指派信息进行任务过滤
+# Multi-Agent Inbox Processor (v3.0)
+# 同步 GitHub 状态并处理任务
 
-MY_ROLE_LABEL=$1  # 例如: skill/answer
-MY_USERNAME=$2    # 你的 GitHub 用户名 (可选)
+TOKEN=$1
+MY_ROLE_LABEL=$2  # 例如: skill/answer
+MY_USERNAME=$3    # 可选
 
+DASHBOARD_URL="https://multi-agent-task-dashboard.vercel.app"
 INBOX_FILE="inbox/events.jsonl"
 
-# 1. 过滤逻辑：我是谁？我的任务在哪？
-# 策略 A: 检查 Issue/Discussion 的标签是否匹配我的角色 (如 skill/answer)
-# 策略 B: 检查我是否被设为负责人 (Assignee)
-# 策略 C: 检查内容中是否 @ 了我的用户名
-
-echo "🔍 Scanning inbox for $MY_ROLE_LABEL..."
-
-if [ ! -f "$INBOX_FILE" ]; then
-  echo "Inbox file not found. Please sync first."
+if [ -z "$TOKEN" ]; then
+  echo "❌ Error: GITHUB_TOKEN is required."
+  echo "Usage: ./inbox_processor.sh <token> <role_label> [username]"
   exit 1
 fi
 
-# 使用 jq 进行高级过滤
-# 逻辑：查找 (title 包含角色标签) OR (如果是评论事件且内容包含 @我)
-jq -c ". | select(.title | contains(\"$MY_ROLE_LABEL\"))" "$INBOX_FILE" | while read -r event; do
-  TITLE=$(echo "$event" | jq -r '.title')
-  URL=$(echo "$event" | jq -r '.url')
-  SENDER=$(echo "$event" | jq -r '.sender')
-  
-  echo "------------------------------------------------"
-  echo "🔔 [任务提醒] 来自 $SENDER"
-  echo "📌 标题: $TITLE"
-  echo "🔗 链接: $URL"
-done
+# 1. 同步最新代码 (确保 inbox/events.jsonl 是最新的)
+echo "🔄 Syncing repository..."
+git pull --rebase origin main
 
-if [ ! -z "$MY_USERNAME" ]; then
-  echo "💬 Checking for mentions of @$MY_USERNAME..."
-  jq -c ". | select(.event == \"issue_comment\" or .event == \"discussion_comment\")" "$INBOX_FILE" | grep "@$MY_USERNAME" | while read -r mention; do
-    echo "📣 [提及提醒] 有人在讨论中艾特了你！"
-    echo "🔗 链接: $(echo "$mention" | jq -r '.url')"
+if [ ! -f "$INBOX_FILE" ]; then
+  echo "ℹ️ Inbox is empty or not found. Checking direct Issues..."
+else
+  echo "🔍 Scanning inbox for $MY_ROLE_LABEL..."
+  # 打印最近的任务提醒
+  jq -c ". | select(.title | contains(\"$MY_ROLE_LABEL\"))" "$INBOX_FILE" | tail -n 5 | while read -r event; do
+    echo "🔔 [Inbox Match]: $(echo "$event" | jq -r '.title') -> $(echo "$event" | jq -r '.url')"
   done
 fi
+
+# 2. 深度扫描 GitHub Issues (核心发现机制)
+echo "🕵️ Deep scanning GitHub Issues for $MY_ROLE_LABEL..."
+gh issue list --label "$MY_ROLE_LABEL" --label "task" --state open --json number,title,url,updatedAt --limit 10 | jq -c ".[]" | while read -r issue; do
+  NUMBER=$(echo "$issue" | jq -r '.number')
+  TITLE=$(echo "$issue" | jq -r '.title')
+  URL=$(echo "$issue" | jq -r '.url')
+  
+  echo "------------------------------------------------"
+  echo "📌 Found Task #$NUMBER: $TITLE"
+  echo "🔗 $URL"
+  echo "❓ Do you want to claim this task? (y/n)"
+  # 如果是自动化 Agent，可以直接执行锁定逻辑
+done

@@ -30,10 +30,20 @@ fi
 # Decode JSON string (handle \n, \t etc) - simple version using printf
 printf "%b" "$PROTOCOL" > "./PROTOCOL.md"
 
-# 2. Get Agent Info from agents.json via Dashboard (Optional but helpful)
+# 2. Download helper scripts
+echo "📥 Downloading helper scripts..."
+curl -sSL "$DASHBOARD_URL/inbox_processor.sh" -o "./inbox_processor.sh"
+chmod +x "./inbox_processor.sh"
+
+# 3. Get Agent Info from agents.json via Dashboard (Optional but helpful)
 curl -sSL "$DASHBOARD_URL/api/agents?token=$TOKEN" -o "./agents_config.json"
+
+# 4. Initialize Inbox directory
+mkdir -p inbox
+touch inbox/events.jsonl
 
 echo "✅ System bound successfully."
 echo "📜 Protocol saved to ./PROTOCOL.md"
 echo "🤖 Agent config saved to ./agents_config.json"
+echo "🛠️ Script saved to ./inbox_processor.sh"
 echo "🚀 Agent is ready to process tasks from inbox."
