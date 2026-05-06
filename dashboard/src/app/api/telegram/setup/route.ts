@@ -29,31 +29,55 @@ export async function POST(req: Request) {
     baseUrl = baseUrl.replace(/\/$/, "");
     const webhookUrl = `${baseUrl}/api/telegram/hook`.trim();
 
-    // 3. 调用 Telegram API (改用 POST JSON 格式，避开 URL 编码问题)
-    const tgApiUrl = `https://api.telegram.org/bot${botToken}/setWebhook`;
+    // 3. 调用 Telegram API (1: 设置 Webhook)
+    const setWebhookUrl = `https://api.telegram.org/bot${botToken}/setWebhook`;
+    const setCommandsUrl = `https://api.telegram.org/bot${botToken}/setMyCommands`;
 
     try {
-      const response = await fetch(tgApiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: webhookUrl,
-          drop_pending_updates: true,
-          allowed_updates: ["message", "edited_message", "callback_query", "channel_post", "edited_channel_post"]
+      // 同时执行 Webhook 设置和命令菜单设置
+      const [webhookRes, commandsRes] = await Promise.all([
+        fetch(setWebhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: webhookUrl,
+            drop_pending_updates: true,
+            allowed_updates: ["message", "edited_message", "callback_query", "channel_post", "edited_channel_post"]
+          }),
         }),
-      });
+        fetch(setCommandsUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            commands: [
+              { command: "tasks", description: "查看待办任务" },
+              { command: "summary", description: "查看任务总览" },
+              { command: "new", description: "发布新任务 (格式: /new 标题)" },
+              { command: "broadcast", description: "全员广播指令 (格式: /broadcast 内容)" },
+              { command: "agents", description: "查看在线智能体名册" },
+              { command: "status", description: "系统健康检查" },
+              { command: "help", description: "查看使用帮助" }
+            ]
+          }),
+        })
+      ]);
 
-      const data = await response.json();
+      const webhookData = await webhookRes.json();
+      const commandsData = await commandsRes.json();
       
-      if (!data.ok) {
+      if (!webhookData.ok) {
         return NextResponse.json({ 
-          error: data.description, 
-          url: webhookUrl,
-          debug: "Telegram rejected the URL. Ensure the domain is public and HTTPS is valid."
+          error: `Webhook error: ${webhookData.description}`, 
+          url: webhookUrl 
         }, { status: 400 });
       }
 
-      return NextResponse.json({ success: true, message: "Webhook activated!", url: webhookUrl });
+      return NextResponse.json({ 
+        success: true, 
+        message: "Webhook and Slash Commands activated!", 
+        url: webhookUrl,
+        menu: commandsData.ok ? "Menu updated" : "Menu update failed"
+      });
     } catch (error: any) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }

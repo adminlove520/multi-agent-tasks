@@ -105,6 +105,21 @@ export async function POST(req: Request) {
       await sendTelegramMessage(botToken, chatId, `✅ *任务创建成功!*\n\n[#${newIssue.number}](${newIssue.html_url}) ${newIssue.title}`);
     }
 
+    // 5.1 全员广播 (同步至所有 Agent)
+    else if (command === "/broadcast") {
+      const content = args.slice(1).join(" ");
+      if (!content) return await sendTelegramMessage(botToken, chatId, "⚠️ 请输入广播内容，如: `/broadcast 请更新系统` (Markdown)");
+
+      const { data: newIssue } = await octokit.rest.issues.create({
+        owner, repo, 
+        title: `[BROADCAST] ${content.substring(0, 30)}...`, 
+        body: `📢 **全员广播指令**\n\n**发起人**: 指挥官\n**内容**: ${content}\n\n请所有 Agent (@agent/all) 确认收到并执行相关操作。`, 
+        labels: ["task", "priority/P1", "skill/all"]
+      });
+
+      await sendTelegramMessage(botToken, chatId, `📢 *广播已发布!*\n\n任务已创建并同步给所有智能体: [#${newIssue.number}](${newIssue.html_url})`);
+    }
+
     // 6. 查看智能体名册
     else if (command === "/agents") {
       try {
