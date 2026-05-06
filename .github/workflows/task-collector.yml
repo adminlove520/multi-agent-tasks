@@ -47,5 +47,12 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          chmod +x .github/scripts/tg_notify.sh
-          ./.github/scripts/tg_notify.sh "<b>📊 任务整点汇总报告</b>%0A$(date +'%Y-%m-%d %H:00')%0A%0A$REPORT_BODY%0A%0A<a href='https://multi-agent-task-dashboard.vercel.app'>🌐 进入看板</a>"
+          if [ ! -z "$TELEGRAM_BOT_TOKEN" ]; then
+            # Convert markdown to HTML or simplified text for TG
+            MSG="📊 *Hourly Task Report*\n$(date +'%Y-%m-%d %H:00')\n\n$(cat report.md | sed 's/#//g' | sed 's/\*\*/\*/g')"
+            curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+              -d "chat_id=$TELEGRAM_CHAT_ID" \
+              -d "text=$MSG" \
+              -d "parse_mode=Markdown" \
+              -d "disable_web_page_preview=true"
+          fi

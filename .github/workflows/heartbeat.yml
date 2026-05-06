@@ -54,10 +54,20 @@ jobs:
             echo "INACTIVE_ALERT=false" >> $GITHUB_ENV
           fi
 
-      - name: Post Alert to Discussions
+      - name: Post Alert to Discussions & Telegram
         if: env.INACTIVE_ALERT == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          chmod +x .github/scripts/discussion_helper.sh
-          ./.github/scripts/discussion_helper.sh post "Agent Brainstorming" "🚨 System Alert: Inactive Agents Detected" "$ALERT_CONTENT"
+          chmod +x dashboard/public/discussion_helper.sh
+          ./dashboard/public/discussion_helper.sh post "Agent Brainstorming" "🚨 System Alert: Inactive Agents Detected" "$ALERT_CONTENT"
+          
+          if [ ! -z "$TELEGRAM_BOT_TOKEN" ]; then
+            MSG="🚨 *System Alert: Inactive Agents Detected*\n\nThe following tasks appear to be stalled:\n\n$(echo -e "$ALERT_BODY" | sed 's/\*\*/\*/g')"
+            curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+              -d "chat_id=$TELEGRAM_CHAT_ID" \
+              -d "text=$MSG" \
+              -d "parse_mode=Markdown"
+          fi

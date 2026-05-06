@@ -64,10 +64,30 @@ export const translations = {
       channel_id: "Channel ID",
       status: "Connection Status",
       test: "Send Test Message",
+      activate: "Activate Bot Commands",
+      active: "Bot Commands: Active",
+      inactive: "Bot Commands: Inactive",
       guide: "Setup Guide",
       step1: "1. Create a Bot via @BotFather",
       step2: "2. Create a Channel and link a Group",
       step3: "3. Add Bot as Admin to the Channel",
+    }
+  },
+  zh: {
+    // ...
+    telegram: {
+      title: "Telegram 控制中心",
+      bot_token: "机器人 Token",
+      channel_id: "频道 ID",
+      status: "连接状态",
+      test: "发送测试消息",
+      activate: "激活 Bot 指令集",
+      active: "Bot 指令集：已激活",
+      inactive: "Bot 指令集：未激活",
+      guide: "配置指南",
+      step1: "1. 通过 @BotFather 创建机器人",
+      step2: "2. 创建频道并关联群组",
+      step3: "3. 将机器人设为频道管理员",
     }
   },
   zh: {

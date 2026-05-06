@@ -21,22 +21,31 @@ export default function Home() {
   const [tgConfig, setTgConfig] = useState({ botToken: "", chatId: "" });
   const [isSavingTg, setIsSavingTg] = useState(false);
   const [isTestingTg, setIsTestingTg] = useState(false);
+  const [isActivatingTg, setIsActivatingTg] = useState(false);
+  const [tgWebhookActive, setTgWebhookActive] = useState(false);
 
-  // Agents State
-  const [agents, setAgents] = useState<any[]>([]);
-  const [isSavingAgents, setIsSavingAgents] = useState(false);
-  const [isLoadingAgents, setIsLoadingAgents] = useState(false);
-  
-  const t = translations[locale];
+  // ...
 
-  const fetchTasks = async () => {
-    setLoading(true);
+  const handleActivateTgWebhook = async () => {
+    setIsActivatingTg(true);
     try {
-      const res = await fetch("/api/tasks");
-      const data = await res.json();
-      if (Array.isArray(data)) setTasks(data);
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
+      const res = await fetch("/api/telegram/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ botToken: tgConfig.botToken, action: "activate_webhook" }),
+      });
+      if (res.ok) {
+        setTgWebhookActive(true);
+        alert(locale === "en" ? "Telegram Bot Commands activated!" : "Telegram Bot 指令集已激活！");
+      } else {
+        const data = await res.json();
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsActivatingTg(false);
+    }
   };
 
   const fetchSkills = async () => {
@@ -511,14 +520,22 @@ export default function Home() {
                         onChange={(e) => setTgConfig({ ...tgConfig, chatId: e.target.value })}
                       />
                     </div>
-                    <div className="flex gap-4">
+                    <div className="flex flex-wrap gap-4">
                       <button 
                         onClick={handleSaveTgConfig}
                         disabled={isSavingTg}
-                        className="flex-1 bg-gray-900 text-white font-bold py-3 rounded-xl hover:bg-black transition-all flex items-center justify-center gap-2"
+                        className="flex-1 bg-gray-900 text-white font-bold py-3 rounded-xl hover:bg-black transition-all flex items-center justify-center gap-2 min-w-[150px]"
                       >
                         {isSavingTg ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                         {t.agents.save}
+                      </button>
+                      <button 
+                        onClick={handleActivateTgWebhook}
+                        disabled={isActivatingTg}
+                        className="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-all flex items-center justify-center gap-2 min-w-[150px]"
+                      >
+                        {isActivatingTg ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                        {t.telegram.activate}
                       </button>
                       <button 
                         onClick={handleTestTgMessage}
