@@ -56,6 +56,34 @@ write_state() {
     '{"last_activity":($a|tonumber),"last_scan":($s|tonumber)}' > "$STATE_FILE"
 }
 
+REPLIED_FILE="/tmp/agent_${AGENT_SLUG}_replied.json"
+REPLIED_TTL=300  # 5分钟内不重复回复同一项
+
+check_replied() {
+  local item_type=$1
+  local item_num=$2
+  local key="${item_type}_${item_num}"
+  local replied_time=$(jq -r ".[\"$key\"] // 0" "$REPLIED_FILE" 2>/dev/null || echo 0)
+  if [ "$replied_time" -eq 0 ]; then
+    return 0  # 未回复过
+  fi
+  local age=$((NOW - replied_time))
+  if [ $age -lt $REPLIED_TTL ]; then
+    return 1  # 已回复过且在TTL内
+  fi
+  return 0  # 已过期
+}
+
+mark_replied() {
+  local item_type=$1
+  local item_num=$2
+  local key="${item_type}_${item_num}"
+  local tmp=$(mktemp)
+  jq ". + {\"$key\": $NOW}" "$REPLIED_FILE" > "$tmp" 2>/dev/null && mv "$tmp" "$REPLIED_FILE" || echo "{}" > "$REPLIED_FILE"
+}
+
+[ ! -f "$REPLIED_FILE" ] && echo "{}" > "$REPLIED_FILE"
+
 read_state
 NOW=$(date +%s)
 
@@ -99,6 +127,12 @@ if [ -n "$DISC_DATA" ]; then
     D_NUM=$(echo "$disc" | jq -r '.number')
     D_TITLE=$(echo "$disc" | jq -r '.title')
 
+    # 检查是否在TTL内重复回复
+    if ! check_replied "discussion" "$D_NUM"; then
+      echo "⏭️ DISCUSSION #$D_NUM already replied recently. Skip."
+      continue
+    fi
+
     # 检查自己是否已发布过回复 (根据 [AgentName] 前缀判断)
     HAS_POSTED=$(echo "$disc" | jq -r ".comments.nodes[] | .body" 2>/dev/null | grep -F "[$AGENT_NAME]" | wc -l)
 
@@ -120,18 +154,21 @@ if [ -n "$DISC_DATA" ]; then
       echo "🔔 TAGGED! Replying with PROPOSAL..."
       gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
         -f id="$D_ID" -f body="[$AGENT_NAME] [PROPOSAL]: 已收到艾特！我正在分析上下文，将尽快给出方案。" >/dev/null
+      mark_replied "discussion" "$D_NUM"
     elif [ "$HAS_POSTED" -eq "0" ]; then
       echo "------------------------------------------------"
       echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
       echo "👉 Action: Auto-replying initial ACK..."
       gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
         -f id="$D_ID" -f body="[$AGENT_NAME] [ACK]: 收到讨论邀请。我正在分析上下文，稍后给出方案。" >/dev/null
+      mark_replied "discussion" "$D_NUM"
     elif [ "$HAS_REAL_REPLY" -eq "0" ]; then
       echo "------------------------------------------------"
       echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
       echo "🚨 PENDING DEBT: Only sent ACK, MUST provide PROPOSAL!"
       gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
         -f id="$D_ID" -f body="[$AGENT_NAME] [PROPOSAL]: 经过分析，我有以下方案供参考。详情见正文。" >/dev/null
+      mark_replied "discussion" "$D_NUM"
     fi
   done < <(echo "$DISC_DATA" | jq -c ".")
 else
@@ -149,27 +186,34 @@ if [ -n "$ISSUE_DATA" ] && [ "$ISSUE_DATA" != "[]" ]; then
     I_LABELS=$(echo "$issue" | jq -r '.labels[].name')
 
     if echo "$I_LABELS" | grep -qE "($MY_ROLE_LABEL|skill/all)"; then
-      # 检查是否已包含实质性回复
-      HAS_REAL_I_REPLY=$(gh issue view $I_NUM --json comments --jq ".comments[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null | grep -v "\[ACK\]" | wc -l)
+      # 检查是否在TTL内重复回复
+      if ! check_replied "issue" "$I_NUM"; then
+        echo "⏭️ ISSUE #$I_NUM already replied recently. Skip."
+      else
+        # 检查是否已包含实质性回复
+        HAS_REAL_I_REPLY=$(gh issue view $I_NUM --json comments --jq ".comments[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null | grep -v "\[ACK\]" | wc -l)
 
-      # 检查 Issue 标题/正文是否艾特了本 agent 或 all（不查评论）
-      ISSUE_BODY=$(gh issue view $I_NUM --json body,title --jq '[.body, .title] | join(" ")' 2>/dev/null)
-      IS_TAGGED_ISSUE=$(echo "$ISSUE_BODY" | grep -iE "@agent/${AGENT_SLUG}|@agent/all" | wc -l)
+        # 检查 Issue 标题/正文是否艾特了本 agent 或 all（不查评论）
+        ISSUE_BODY=$(gh issue view $I_NUM --json body,title --jq '[.body, .title] | join(" ")' 2>/dev/null)
+        IS_TAGGED_ISSUE=$(echo "$ISSUE_BODY" | grep -iE "@agent/${AGENT_SLUG}|@agent/all" | wc -l)
 
-      echo "📌 ISSUE #$I_NUM: $I_TITLE"
+        echo "📌 ISSUE #$I_NUM: $I_TITLE"
 
-      # 三层规则
-      if [ "$IS_TAGGED_ISSUE" -gt "0" ] && [ "$HAS_REAL_I_REPLY" -eq "0" ]; then
-        echo "🔔 TAGGED! Must respond with real content."
-        gh issue comment $I_NUM --body="[@$VIRTUAL_MENTION] 收到艾特！我正在查看内容，稍后给出方案。" 2>/dev/null
-      elif [ "$HAS_REAL_I_REPLY" -eq "0" ]; then
-        echo "🚨 PENDING DEBT: Only sent ACK, MUST provide PROPOSAL!"
-        gh issue comment $I_NUM --body="[$AGENT_NAME] [PROPOSAL]: 经过分析，我有以下方案供参考。详情见正文。" 2>/dev/null
-        # 执行锁定逻辑 (仅针对专属任务且未锁定的)
-        IS_LOCKED=$(gh issue view $I_NUM --json labels --jq ".labels[] | select(.name | startswith(\"agent/\"))" 2>/dev/null | wc -l)
-        if echo "$I_LABELS" | grep -q "$MY_ROLE_LABEL" && [ "$IS_LOCKED" -eq "0" ]; then
-          echo "🔒 Claiming private task..."
-          gh issue edit $I_NUM --add-label "task/processing,$IDENTITY_LABEL" --remove-label "task" 2>/dev/null
+        # 三层规则
+        if [ "$IS_TAGGED_ISSUE" -gt "0" ] && [ "$HAS_REAL_I_REPLY" -eq "0" ]; then
+          echo "🔔 TAGGED! Must respond with real content."
+          gh issue comment $I_NUM --body="[@$VIRTUAL_MENTION] 收到艾特！我正在查看内容，稍后给出方案。" 2>/dev/null
+          mark_replied "issue" "$I_NUM"
+        elif [ "$HAS_REAL_I_REPLY" -eq "0" ]; then
+          echo "🚨 PENDING DEBT: Only sent ACK, MUST provide PROPOSAL!"
+          gh issue comment $I_NUM --body="[$AGENT_NAME] [PROPOSAL]: 经过分析，我有以下方案供参考。详情见正文。" 2>/dev/null
+          mark_replied "issue" "$I_NUM"
+          # 执行锁定逻辑 (仅针对专属任务且未锁定的)
+          IS_LOCKED=$(gh issue view $I_NUM --json labels --jq ".labels[] | select(.name | startswith(\"agent/\"))" 2>/dev/null | wc -l)
+          if echo "$I_LABELS" | grep -q "$MY_ROLE_LABEL" && [ "$IS_LOCKED" -eq "0" ]; then
+            echo "🔒 Claiming private task..."
+            gh issue edit $I_NUM --add-label "task/processing,$IDENTITY_LABEL" --remove-label "task" 2>/dev/null
+          fi
         fi
       fi
     fi
