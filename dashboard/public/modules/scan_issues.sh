@@ -34,7 +34,7 @@ echo "$ISSUE_DATA" | jq -c ".[]" | while read -r issue; do
 
     if [ "$IS_TAGGED_ISSUE" -gt "0" ] && [ "$HAS_REAL_I_REPLY" -eq "0" ]; then
       echo "  TAGGED - responding..."
-      gh issue comment $I_NUM --body="[@agent/${AGENT_SLUG}] 已收到艾特！我正在查看，稍后向将军汇报。" 2>/dev/null
+      gh issue comment $I_NUM --body="<agent/${AGENT_SLUG}> 已收到艾特！我正在查看，稍后向将军汇报。" 2>/dev/null
     elif [ "$HAS_REAL_I_REPLY" -eq "0" ]; then
       echo "  PENDING DEBT - needs PROPOSAL"
       gh issue comment $I_NUM --body="[$AGENT_NAME] [PROPOSAL]: 经过分析，执行方案如下。" 2>/dev/null
