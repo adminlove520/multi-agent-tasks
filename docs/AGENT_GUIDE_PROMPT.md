@@ -1,4 +1,4 @@
-# Agent 部署指南 v2.0
+# Agent 部署指南 v2.1
 
 ## 目录结构
 
@@ -17,63 +17,78 @@ multi-agent-tasks/
 │       ├── daily_report.sh   # 日报生成
 │       └── update_activity.sh # 状态更新
 ├── dashboard/                # Next.js Dashboard
-├── agents.json              # Agent 身份配置
+├── agents.json              # ⭐ Agent 身份配置
 └── docs/                    # 文档
 ```
 
 ## Agent 身份配置
 
-在 `agents.json` 中配置：
+在 `agents.json` 中配置你的 Agent：
 
 ```json
 {
   "agents": [
-    { "name": "小溪", "slug": "xiaoxi", "role": "commander" },
-    { "name": "Answer", "slug": "answer", "role": "collector" },
-    { "name": "太子", "slug": "taizi", "role": "executor" }
+    {
+      "name": "{{你的Agent名字}}",
+      "slug": "{{agent-slug}}",
+      "role": "collector"
+    }
   ]
 }
 ```
 
+**字段说明**：
+- `name` - Agent 的名字（用于显示）
+- `slug` - Agent 的唯一标识（用于 cron 参数）
+- `role` - Agent 的角色（collector/executor/commander）
+
 ## Cron 部署
 
-每个 Agent 配置自己的 cron：
-
 ```bash
-# Answer 的 cron
-*/5 * * * * cd ~/multi-agent-tasks && bash scripts/inbox_processor.sh "$TOKEN" "answer" >> /tmp/agent_answer.log 2>&1
-
-# 太子 的 cron
-*/5 * * * * cd ~/multi-agent-tasks && bash scripts/inbox_processor.sh "$TOKEN" "taizi" >> /tmp/agent_taizi.log 2>&1
+# 通用 cron 命令
+*/5 * * * * cd ~/multi-agent-tasks && bash scripts/inbox_processor.sh "$TOKEN" "{{AGENT_SLUG}}" >> /tmp/agent_{{AGENT_SLUG}}.log 2>&1
 ```
 
 **参数说明**：
 - `$TOKEN` - GitHub Personal Access Token
-- `"answer"` 或 `"taizi"` - Agent 的 slug，从 agents.json 读取对应身份
+- `{{AGENT_SLUG}}` - 你的 agent_slug，从 agents.json 配置
+
+**示例**：
+```bash
+# 如果你的 slug 是 "answer"
+*/5 * * * * cd ~/multi-agent-tasks && bash scripts/inbox_processor.sh "$TOKEN" "answer" >> /tmp/agent_answer.log 2>&1
+
+# 如果你的 slug 是 "taizi"
+*/5 * * * * cd ~/multi-agent-tasks && bash scripts/inbox_processor.sh "$TOKEN" "taizi" >> /tmp/agent_taizi.log 2>&1
+```
 
 ## 手动运行测试
 
 ```bash
-# 进入目录
 cd ~/multi-agent-tasks
-
-# 测试 Answer
-bash scripts/inbox_processor.sh "$TOKEN" "answer"
-
-# 测试 太子
-bash scripts/inbox_processor.sh "$TOKEN" "taizi"
+bash scripts/inbox_processor.sh "$TOKEN" "{{AGENT_SLUG}}"
 ```
 
-## 汇报链
+## 身份自动读取
 
-| Agent | 汇报给 |
-|-------|--------|
-| 太子 | Answer |
-| Answer | 小溪 |
+脚本会从 `agents.json` 自动读取你的身份信息：
+- `name` → 用于显示和 Discussion 回复
+- `slug` → 用于 @mention 匹配
+- `role` → 用于 Issue 标签匹配
+
+**你不需要手动传这些参数**，只需要传 slug 就行！
+
+## 角色说明
+
+| 角色 | 说明 | 示例 |
+|------|------|------|
+| commander | 指挥官，下达命令 | 小溪 |
+| collector | 收集者，分解任务 | Answer |
+| executor | 执行者，执行任务 | 太子 |
 
 ## 注意事项
 
-1. **git pull**：每次运行前会先 git pull 拉取最新代码
+1. **git pull**：每次运行前会先 `git pull` 拉取最新代码
 2. **安静期**：30分钟无活动才扫描，有活动就跳过
 3. **进程锁**：有 flock 保护，不会重复运行
-4. **身份自动读取**：不需要手动传 role_label，从 agents.json 自动获取
+4. **身份在 agents.json**：不要硬编码名字，都从配置文件读取
