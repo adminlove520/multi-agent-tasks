@@ -25,10 +25,11 @@ fi
 
 export AGENT_NAME=$(echo "$AGENT_INFO" | jq -r '.name')
 export AGENT_SLUG=$(echo "$AGENT_INFO" | jq -r '.slug')
-export MY_ROLE_LABEL=$(echo "$AGENT_INFO" | jq -r '.role')
-export IDENTITY_LABEL="agent/${AGENT_SLUG}"
+export MY_ROLE_LABEL=$(echo "$AGENT_INFO" | jq -r '.label')
+export IDENTITY_LABEL=$(echo "$AGENT_INFO" | jq -r '.label')
 export VIRTUAL_MENTION="@agent/${AGENT_SLUG}"
 export FRAMEWORK=$(echo "$AGENT_INFO" | jq -r '.framework')
+export AGENT_ROLE=$(echo "$AGENT_INFO" | jq -r '.role')  # commander/collector/executor
 
 echo "Agent identity loaded:"
 echo "  Name: $AGENT_NAME"

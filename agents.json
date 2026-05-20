@@ -1,32 +1,32 @@
-{
-  "agents": [
-    {
-      "id": 1777736021322,
-      "name": "小溪",
-      "slug": "xiaoxi",
-      "role": "commander",
-      "framework": "openclaw",
-      "tgToken": "********",
-      "tgUsername": "caddycherrybot"
-    },
-    {
-      "id": 1777736058758,
-      "name": "Answer",
-      "slug": "answer",
-      "role": "collector",
-      "framework": "openclaw",
-      "tgToken": "********",
-      "tgUsername": "Anwsermebot"
-    },
-    {
-      "id": 1777736107102,
-      "name": "太子",
-      "slug": "taizi",
-      "role": "executor",
-      "framework": "hermes",
-      "tgToken": "********",
-      "tgUsername": "help_localbot"
-    }
-  ],
-  "lastUpdated": "2026-05-20T10:07:43.547Z"
-}
+[
+  {
+    "id": 1777736021322,
+    "name": "小溪",
+    "slug": "xiaoxi",
+    "role": "commander",
+    "label": "skill/xiaoxi",
+    "framework": "openclaw",
+    "tgToken": "********",
+    "tgUsername": "caddycherrybot"
+  },
+  {
+    "id": 1777736058758,
+    "name": "Answer",
+    "slug": "answer",
+    "role": "collector",
+    "label": "skill/answer",
+    "framework": "openclaw",
+    "tgToken": "********",
+    "tgUsername": "Anwsermebot"
+  },
+  {
+    "id": 1777736107102,
+    "name": "太子",
+    "slug": "taizi",
+    "role": "executor",
+    "label": "skill/taizi",
+    "framework": "hermes",
+    "tgToken": "********",
+    "tgUsername": "help_localbot"
+  }
+]
