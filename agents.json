@@ -4,9 +4,9 @@
       "id": 1777736021322,
       "name": "小溪",
       "slug": "xiaoxi",
-      "role": "executor",
+      "role": "commander",
       "framework": "openclaw",
-      "tgToken": "SECRET:AGENT_ID_1777736021322_TOKEN",
+      "tgToken": "********",
       "tgUsername": "caddycherrybot"
     },
     {
@@ -15,7 +15,7 @@
       "slug": "answer",
       "role": "collector",
       "framework": "openclaw",
-      "tgToken": "SECRET:AGENT_ANSWER_TOKEN",
+      "tgToken": "********",
       "tgUsername": "Anwsermebot"
     },
     {
@@ -24,9 +24,9 @@
       "slug": "taizi",
       "role": "executor",
       "framework": "hermes",
-      "tgToken": "SECRET:AGENT_ID_1777736107102_TOKEN",
+      "tgToken": "********",
       "tgUsername": "help_localbot"
     }
   ],
-  "lastUpdated": "2026-05-06T03:30:00.000Z"
+  "lastUpdated": "2026-05-20T10:07:43.547Z"
 }
