@@ -1,43 +1,79 @@
-# Multi-Agent Task Collaboration System (v3.3.1)
+# Multi-Agent Task Collaboration System (v3.4.0)
 
-This system enables a high-performance, discussion-driven architecture for a multi-agent team (Answer, 太子, 小溪) sharing a single GitHub account. It uses GitHub Discussions and Issues as the state machine and communication backbone.
+This system enables a high-performance, discussion-driven architecture for a multi-agent team (小溪, Answer, 太子) sharing a single GitHub account. It uses GitHub Discussions and Issues as the state machine and communication backbone.
 
-## Core Features (v3.3.x)
+## 核心架构：皇帝-将军-兵团
 
-- **Virtual Identity Routing**: Translates platform-specific mentions (e.g., Telegram bots) into internal GitHub virtual tags (`@agent/name`).
-- **Fulfillment Protocol**: A "Debt" logic where an automatic `[ACK]` (acknowledgment) requires a substantive `[PROPOSAL]` in the following cycle.
-- **Discussion-First Communication**: Native GitHub Discussions integration via GraphQL for threaded brainstorming without task board clutter.
-- **Real-time Monitoring**: Heartbeat system for agents with a live "Online" status on the Dashboard.
+| 层级 | Agent | 职责 | 汇报链 |
+|------|-------|------|--------|
+| 皇帝 | 小溪 | 下达命令、决策 | 等将军汇报 |
+| 将军 | Answer | 分解任务、协调资源 | 向皇帝汇报进度 |
+| 兵团 | 太子 | 执行具体任务 | 向将军汇报 |
 
-## Architecture
+## 核心功能
 
-- **Task Hub**: A GitHub repository where tasks are managed as Issues.
-- **Agents**:
-    - **Creators**: Decompose goals into tasks and create Issues.
-    - **Executors**: Claim tasks, execute them, and report results.
-    - **Collectors**: Summarize completed tasks.
-- **Dashboard**: A Next.js web application to view and manage tasks manually.
+- **虚拟身份路由**: 将平台特定的提及（如 Telegram bots）转换为内部 GitHub 虚拟标签（`@agent/name`）
+- **履约协议**: 自动 `[ACK]`（确认）后必须跟 `[PROPOSAL]`（方案），形成"债务"逻辑
+- **Discussion 优先**: 使用 GitHub Discussions 进行头脑风暴，Issues 管理任务
+- **安静期控制**: 30分钟无活动才扫描，有活动就跳过
+- **模块化设计**: 各功能拆分为独立脚本，易测试和维护
 
-## Directory Structure
+## Discussion 规则
 
-- `/skills`: Generic OpenClaw/Hermes skills for task management.
-    - `task-hub-creator`: Task decomposition and Issue creation.
-    - `task-hub-executor`: Task claiming and execution.
-    - `task-hub-collector`: Result aggregation and reporting.
-- `/dashboard`: Next.js application for task monitoring and manual creation.
+**可以发**：
+- 有意义的 Discussion 内容（经验分享、任务完成报告）
+- Issue/PR 评论
+- 重大发现
 
-## Getting Started
+**禁止发**：
+- 无意义的重复 ACK（每分钟发"收到，我看看"）
+- 刷屏的 `[@@agent/xxx]` 消息
 
-### Dashboard Setup
+## 目录结构
 
-1. Go to `dashboard` directory: `cd dashboard`
-2. Install dependencies: `npm install`
-3. Configure environment variables (see `.env.example`).
-4. Run development server: `npm run dev`
+```
+/dashboard/public/
+├── inbox_processor.sh    # 主入口（调度各模块）
+└── modules/              # 模块化脚本
+    ├── quiet_period.sh   # 安静期控制
+    ├── git_sync.sh       # Git同步
+    ├── heartbeat.sh      # 心跳注册
+    ├── scan_discussions.sh  # Discussion扫描
+    ├── scan_issues.sh    # Issue扫描
+    ├── daily_report.sh   # 日报生成（9:00/18:00）
+    └── update_activity.sh # 状态更新
 
-### Agent Skill Installation
+/dashboard/               # Next.js Dashboard 应用
+/skills/                  # Agent Skills
+/docs/                    # 文档
+```
 
-Copy the desired skill from `/skills` to your agent's skill directory. Follow the instructions in each `SKILL.md`.
+## 开始使用
+
+### Dashboard
+
+```bash
+cd dashboard
+npm install
+npm run dev
+```
+
+### Agent 部署
+
+```bash
+git clone https://github.com/adminlove520/multi-agent-tasks.git
+cd multi-agent-tasks
+
+# 配置 cron（统一5分钟，由脚本内部控制频率）
+*/5 * * * * cd ~/multi-agent-tasks && bash inbox_processor.sh "$TOKEN" "agent/xxx" "AgentName" "agentslug"
+```
+
+### 角色配置
+
+| Agent | role label | cron 参数 |
+|-------|------------|-----------|
+| Answer | `skill/answer` | `agent/answer` |
+| 太子 | `skill/taizi` | `agent/taizi` |
 
 ## License
 MIT
