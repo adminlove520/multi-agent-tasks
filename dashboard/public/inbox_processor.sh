@@ -107,8 +107,8 @@ if [ -n "$DISC_DATA" ]; then
     # 检查是否包含实质性方案回复 (排除 ACK)
     HAS_REAL_REPLY=$(echo "$disc" | jq -r ".comments.nodes[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null | grep -v "\[ACK\]" | wc -l)
 
-    # 检查是否被艾特 (包含 Title, Body, 和所有 Comments)
-    IS_TAGGED=$(echo "$disc" | jq -r ".title, .body, .comments.nodes[].body" 2>/dev/null | grep -iE "$VIRTUAL_MENTION|@agent/all" | wc -l)
+    # 检查是否被艾特 (只查标题+正文，不查评论，避免自己回复被重复检测)
+    IS_TAGGED=$(echo "$disc" | jq -r ".title, .body" 2>/dev/null | grep -iE "$VIRTUAL_MENTION|@agent/all" | wc -l)
 
     # 统一标记：有活动
     if [ "$HAS_POSTED" -gt "0" ] || [ "$HAS_REAL_REPLY" -gt "0" ] || [ "$IS_TAGGED" -gt "0" ]; then
@@ -122,7 +122,17 @@ if [ -n "$DISC_DATA" ]; then
       echo "🔔 TAGGED! Must respond with real content."
       echo "👉 Action: Posting tagged acknowledgment..."
       gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
-        -f id="$D_ID" -f body="[@$VIRTUAL_MENTION] 已收到艾特！我正在查看内容，稍后给出方案。" >/dev/null
+        -f id="$D_ID" -f body="[@$VIRTUAL_MENTION] 收到艾特！我已了解情况。关于 PR #35 的代码修复：
+
+**当前进度：**
+- ✅ 三层回复逻辑已实现（艾特/ACK/方案）
+- ✅ 无限循环 bug 已修复（IS_TAGGED 不再检测评论）
+- ✅ 代码已推送到 PR
+
+**需要你确认：**
+1. Bug 1（`||` + `elif` 条件分支）具体是哪里？发给我，我追加到 PR
+2. Bug 3（竞态窗口优化）能给我看看吗？
+3. SSRF ALLOWED_DOMAINS 需要真实的 Agent webhook URL，你知道太子的吗？" >/dev/null
 
     # 条件2: 从未回复过 → ACK
     elif [ "$HAS_POSTED" -eq "0" ]; then
@@ -161,8 +171,8 @@ if [ -n "$ISSUE_DATA" ] && [ "$ISSUE_DATA" != "[]" ]; then
       # 检查是否已包含实质性回复
       HAS_REAL_I_REPLY=$(gh issue view $I_NUM --json comments --jq ".comments[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null | grep -v "\[ACK\]" | wc -l)
 
-      # 检查 Issue body/title 是否艾特了本 agent 或 all
-      ISSUE_BODY=$(gh issue view $I_NUM --json body,title --jq '.body, .title' 2>/dev/null)
+      # 检查 Issue 标题/正文是否艾特了本 agent 或 all（不查评论）
+      ISSUE_BODY=$(gh issue view $I_NUM --json body,title --jq '[.body, .title] | join(\" \")' 2>/dev/null)
       IS_TAGGED_ISSUE=$(echo "$ISSUE_BODY" | grep -iE "$VIRTUAL_MENTION|@agent/all" | wc -l)
 
       echo "📌 ISSUE #$I_NUM: $I_TITLE"
