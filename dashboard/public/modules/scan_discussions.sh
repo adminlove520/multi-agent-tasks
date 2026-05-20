@@ -27,8 +27,13 @@ echo "$DISC_DATA" | jq -c "." | while read -r disc; do
   D_NUM=$(echo "$disc" | jq -r '.number')
   D_TITLE=$(echo "$disc" | jq -r '.title')
 
+  # 检查是否已发布过回复（只要包含 [@AgentName] 前缀就算，不管内容类型）
   HAS_POSTED=$(echo "$disc" | jq -r ".comments.nodes[] | .body" 2>/dev/null | grep -F "[$AGENT_NAME]" | wc -l)
-  HAS_REAL_REPLY=$(echo "$disc" | jq -r ".comments.nodes[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null | grep -v "\[ACK\]" | wc -l)
+  
+  # 检查是否包含实质性方案回复（包含 [PROPOSAL]）
+  HAS_REAL_REPLY=$(echo "$disc" | jq -r ".comments.nodes[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null | grep -i "\[PROPOSAL\]" | wc -l)
+  
+  # 检查是否被艾特（只查标题+正文，不查评论）
   IS_TAGGED=$(echo "$disc" | jq -r ".title, .body" | grep -i "@agent/${AGENT_SLUG}" | wc -l)
 
   if [ "$IS_TAGGED" -gt "0" ] && [ "$HAS_REAL_REPLY" -eq "0" ]; then
