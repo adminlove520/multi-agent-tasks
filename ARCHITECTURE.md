@@ -1,4 +1,4 @@
-# Multi-Agent Tasks 架构设计 v1.2
+# Multi-Agent Tasks 架构设计 v1.3
 
 ## 核心架构
 
@@ -20,29 +20,29 @@ Multi-Agent Task Collaboration System，基于 GitHub Issues 和 Discussions 进
 - ❌ **不发重复消息**：同一讨论下只发一次有效回复
 - ❌ **不发刷屏的 [@@agent/xxx] 消息**
 
-### 兵团（太子）
-- ✅ 收到将军派的任务 → 内部记录（不公开发 ACK）
-- ✅ 完成执行 → 向将军汇报
+### 太子
+- ✅ 收到 Answer 派的任务 → 内部记录（不公开发 ACK）
+- ✅ 完成执行 → 向 Answer 汇报
 - ✅ 有意义的 Discussion 内容（经验分享、任务完成报告）
 - ✅ 创建 PR 贡献代码
 - ✅ 回复 Issue 评论
 
 **发 Discussion 的原则**：发有意义的内容（完成了什么、发现了什么、经验分享），不发无意义的确认。
 
-### 将军（Answer）
-- ✅ 收到皇帝的任务 → 分解、派给兵团
-- ✅ 收到兵团汇报 → 汇总、判断是否需要上报
-- ✅ 需要决策时 → 向皇帝发 PROPOSAL（Discussion）
+### Answer
+- ✅ 收到小溪的任务 → 分解、派给太子
+- ✅ 收到太子汇报 → 汇总、判断是否需要上报
+- ✅ 需要决策时 → 向小溪发 PROPOSAL（Discussion）
 - ✅ 每日日报 → Discussion
 - ✅ 回复 Issue 评论
 
-### 皇帝（小溪）
+### 小溪
 - ✅ 下达任务
-- ✅ 等将军的 PROPOSAL 和日报
-- ❌ 不需要知道兵团的每个 ACK
+- ✅ 等 Answer 的 PROPOSAL 和日报
+- ❌ 不需要知道太子的每个 ACK
 - ❌ 不需要盯每分钟状态更新
 
-## Cron 架构（新）
+## Cron 架构
 
 **设计原则**：Linux cron 只负责"定期唤醒"，脚本内部控制扫描频率。
 
@@ -55,21 +55,22 @@ inbox_processor.sh: 检查 quiet period
 如果 30 分钟内没活动 → 扫描一次 → 更新活动时间
 ```
 
-**统一 cron 配置（所有 Agent 相同）**：
+**统一 cron 配置**：
 ```bash
-*/5 * * * * cd ~/multi-agent-tasks && bash inbox_processor.sh "$TOKEN" "agent/xxx" "AgentName" "agentslug" >> /tmp/agent_cron.log 2>&1
+*/5 * * * * cd ~/multi-agent-tasks && bash scripts/inbox_processor.sh "$TOKEN" "<agent_slug>" >> /tmp/agent_cron.log 2>&1
 ```
 
-**优势**：
-- 不用分别配置不同频率的 cron
-- 脚本自己控制"该扫还是不该扫"
-- 安静期机制：30分钟无活动才扫，有活动就等
+**Agent slug 配置**：
+| Agent | slug |
+|-------|------|
+| Answer | `answer` |
+| 太子 | `taizi` |
 
 ## Discussion 治理
 
 **Discussion 只保留**：
 1. 小溪的广播/通知
-2. Answer 的 PROPOSAL（需要皇帝决策）
+2. Answer 的 PROPOSAL（需要小溪决策）
 3. Answer 的日报（每日汇总）
 4. **太子/Answer 的有意义的 Discussion**（经验分享、任务完成）
 
@@ -79,12 +80,10 @@ inbox_processor.sh: 检查 quiet period
 
 ## 速率分级
 
-| 角色 | cron 频率 | quiet period | 原因 |
-|------|-----------|--------------|------|
-| 太子（兵团） | 每5分钟 | 30分钟 | 前线需要快，但也控制频率 |
-| Answer（将军） | 每5分钟 | 30分钟 | 汇总汇报不需要那么快 |
-
-**注意**：cron 频率统一为5分钟，由 quiet period 控制实际扫描间隔。
+| Agent | cron 频率 | quiet period | 原因 |
+|-------|-----------|--------------|------|
+| 太子 | 每5分钟 | 30分钟 | 前线需要快，但也控制频率 |
+| Answer | 每5分钟 | 30分钟 | 汇总汇报不需要那么快 |
 
 ## 信任边界
 
@@ -104,23 +103,44 @@ inbox_processor.sh: 检查 quiet period
 ## 原子锁机制
 
 ```
-兵团认领任务（原子锁）→ 执行 → 向将军汇报
+太子认领任务（原子锁）→ 执行 → 向 Answer 汇报
 ```
 
 - 任务被认领后自动标记 `task/processing,agent/taizi`
 - 完成后标记 `task/done`
-- 避免多个兵团抢同一个任务
+- 避免多个 Executor 抢同一个任务
 
 ## 技术实现
 
-### 共享文件系统
-- VPS 上 Answer 和 太子可以共享 `/workspace/multi-agent-tasks/`
-- 也可以各自有自己的副本（脚本通过 git pull 同步）
+### 目录结构
+```
+multi-agent-tasks/
+├── scripts/
+│   ├── inbox_processor.sh      # 主入口
+│   ├── load_identity.sh        # 从 agents.json 读取身份
+│   └── modules/               # 功能模块
+│       ├── quiet_period.sh
+│       ├── git_sync.sh
+│       ├── heartbeat.sh
+│       ├── scan_discussions.sh
+│       ├── scan_issues.sh
+│       ├── daily_report.sh
+│       └── update_activity.sh
+├── dashboard/                  # Next.js Dashboard 应用
+├── agents.json                # Agent 配置
+└── docs/                      # 文档
+```
 
-### 协调方式
-- GitHub Issue：任务派发（带 skill/answer, skill/taizi 标签）
-- GitHub Discussion：方案讨论、广播、日报
-- 原子锁：Issue 上的标签 + 评论
+### 身份配置
+通过 `agents.json` 自动读取 Agent 身份：
+```json
+{
+  "agents": [
+    { "name": "Answer", "slug": "answer", "role": "collector" },
+    { "name": "太子", "slug": "taizi", "role": "executor" }
+  ]
+}
+```
 
 ### 状态文件
 ```bash
@@ -134,9 +154,9 @@ inbox_processor.sh: 检查 quiet period
 
 ## 权限层级
 
-1. **皇帝（小溪）**：最高权限，可以给任何 Agent 派任务
-2. **将军（Answer）**：可以给兵团派任务，汇总后上报皇帝
-3. **兵团（太子）**：接受将军指令，执行后汇报
+1. **小溪**：最高权限，可以给任何 Agent 派任务
+2. **Answer**：可以给太子派任务，汇总后上报小溪
+3. **太子**：接受 Answer 指令，执行后汇报
 
 **Git 权限**：
 - ✅ 可以 push 到自己的分支（如 `taizi/fix-xxx`）
@@ -154,14 +174,12 @@ inbox_processor.sh: 检查 quiet period
 
 ## 改进计划
 
-- [x] 修复 inbox_processor.sh：太子不发 Discussion ACK
+- [x] 修复 inbox_processor.sh：Agent 不发重复 ACK
 - [x] 设置 main 分支保护：禁止 force push
 - [ ] 实现 Answer 向太子派任务的机制
 - [ ] 设计任务状态文件格式
-- [ ] 测试将军-兵团通信
 - [ ] 验证汇报链是否顺畅
 
 ---
 
-*设计：小溪 2026-05-20 v1.1*
-*基于哥哥的"皇帝-将军-兵团"架构思想*
+*设计：小溪 2026-05-21 v1.3*

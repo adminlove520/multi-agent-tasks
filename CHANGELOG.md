@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.5.0] - 2026-05-21
+### Added
+- **scripts/ 目录重构**: 所有脚本从 dashboard/public/ 移到 scripts/
+- **load_identity.sh**: 从 agents.json 自动读取 Agent 身份
+- **简化 cron 参数**: 只需传 token + agent_slug
+
+### Changed
+- **移除皇帝-将军-兵团称呼**: 改用正常名称（小溪、Answer、太子）
+- **ARCHITECTURE.md v1.3**: 更新文档，移除皇帝-将军-兵团描述
+- **README 更新**: 更新架构说明和目录结构
+- **docs/ 更新**: 更新所有文档（AGENT_GUIDE_PROMPT、collector、executor、role_definition_guide）
+
+### Fixed
+- **scan_discussions 重复消息**: HAS_REAL_REPLY 改为检查 [PROPOSAL]
+- **scan_issues [@@agent/xxx] 格式**: 改用 <agent/xxx> 格式
+- **webhook action scope**: 修复 TypeScript scope 错误
+
 ## [3.4.0] - 2026-05-20
 ### Added
 - **模块化重构**: inbox_processor.sh 拆分为独立模块
@@ -12,7 +29,7 @@ All notable changes to this project will be documented in this file.
   - `modules/scan_issues.sh` - Issue扫描
   - `modules/daily_report.sh` - 日报生成（9:00/18:00）
   - `modules/update_activity.sh` - 状态更新
-- **皇帝-将军-兵团架构确立**: 明确三层汇报体系
+- **小溪-Answer-太子架构确立**: 明确三层汇报体系
 - **ARCHITECTURE.md**: 架构设计文档 v1.1
 - **Cron 架构调整**: Linux cron 只唤醒，脚本内部控制频率
 

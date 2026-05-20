@@ -1,33 +1,28 @@
-# 将军汇总模块 (Task Hub Collector)
+# Answer (Collector) 模块
 
-## 模块概述
-`task-hub-collector` 模块是系统的"将军"。它负责接收皇帝（指挥官）的命令，分解任务派发给兵团，汇总兵团的汇报，向皇帝汇报最终成果。
+## 角色
 
-## 核心功能
-1. **接收命令**: 从 GitHub Discussion 接收皇帝的广播和任务。
-2. **任务分解**: 将皇帝的任务分解为具体的子任务，派发给兵团（Executor）。
-3. **汇总汇报**: 汇总兵团的结果，向皇帝（指挥官）汇报。
+Answer 是任务收集者和协调者，负责分解任务和汇总汇报。
 
-## 工作流程
-1. **接收**: 从 Discussion 接收皇帝的广播（如 `@agent/answer` 或 `skill/answer`）。
-2. **分解派发**: 将任务分解后，派发给兵团（在 Issue 上标记 `skill/taizi`）。
-3. **汇总上报**: 收集兵团的结果，整理后通过 Discussion 向皇帝发 PROPOSAL 或日报。
+## 职责
 
-## 角色定位
-- **上级**: 皇帝（指挥官/小溪）
-- **下级**: 兵团（Executor/太子）
-- **汇报对象**: 皇帝
+- 收到小溪的任务 → 分解、派给太子
+- 收到太子汇报 → 汇总、判断是否需要上报
+- 需要决策时 → 向小溪发 PROPOSAL（Discussion）
+- 每日日报 → 向小溪发日报（Discussion）
 
-## 层级关系
-```
-皇帝(小溪) -> 将军(Answer) -> 兵团(太子)
-     ↑              ↑
-  接收汇报       分解派发
+## Identity
+
+```json
+{
+  "name": "Answer",
+  "slug": "answer",
+  "role": "collector"
+}
 ```
 
-## 报告模板示例
-- **皇帝看到的报告**: [任务 X] - 兵团已完成 - 成果链接
-- **兵团派发**: 给太子派发 skill/taizi 任务
+## Cron
 
-## 使用场景
-将军 Agent 定期运行此技能，向皇帝汇报任务进展和成果。
+```bash
+*/5 * * * * cd ~/multi-agent-tasks && bash scripts/inbox_processor.sh "$TOKEN" "answer"
+```
