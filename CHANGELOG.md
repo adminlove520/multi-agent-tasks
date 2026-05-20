@@ -4,43 +4,47 @@ All notable changes to this project will be documented in this file.
 
 ## [3.5.0] - 2026-05-21
 ### Added
-- **scripts/ 目录重构**: 所有脚本从 dashboard/public/ 移到 scripts/
-- **load_identity.sh**: 从 agents.json 自动读取 Agent 身份
-- **简化 cron 参数**: 只需传 token + agent_slug
+- **scripts/ 目录**: 所有脚本从 dashboard/public/ 移到 scripts/
+  - `scripts/inbox_processor.sh` - 主入口
+  - `scripts/load_identity.sh` - 从 agents.json 读取身份
+  - `scripts/modules/` - 功能模块（quiet_period, git_sync, heartbeat, scan_discussions, scan_issues, daily_report, update_activity）
+- **load_identity.sh**: 根据 agent_slug 从 agents.json 自动读取 Agent 完整身份信息
 
 ### Changed
-- **移除皇帝-将军-兵团称呼**: 改用正常名称（小溪、Answer、太子）
-- **ARCHITECTURE.md v1.3**: 更新文档，移除皇帝-将军-兵团描述
-- **README 更新**: 更新架构说明和目录结构
-- **docs/ 更新**: 更新所有文档（AGENT_GUIDE_PROMPT、collector、executor、role_definition_guide）
+- **移除皇帝-将军-兵团称呼**: 全部改用正常名称（小溪、Answer、太子）
+- **cron 参数简化**: 只需传 `token` + `agent_slug`，身份自动从 agents.json 读取
+- **ARCHITECTURE.md v1.3**: 移除皇帝-将军-兵团描述，更新为小溪-Answer-太子架构
+- **README.md**: 重写，更新架构说明和目录结构
+- **docs/AGENT_GUIDE_PROMPT.md**: 更新为正常名称
+- **docs/collector_CN.md**: 更新为正常名称，简化内容
+- **docs/executor_CN.md**: 更新为正常名称，简化内容
+- **docs/role_definition_guide_CN.md**: 更新为正常名称，简化内容
 
 ### Fixed
-- **scan_discussions 重复消息**: HAS_REAL_REPLY 改为检查 [PROPOSAL]
-- **scan_issues [@@agent/xxx] 格式**: 改用 <agent/xxx> 格式
-- **webhook action scope**: 修复 TypeScript scope 错误
+- **scan_discussions 重复消息**: HAS_REAL_REPLY 逻辑改为 grep [PROPOSAL]，不再误判 ACK
+- **scan_issues [@@agent/xxx] 格式**: 改用 `<agent/xxx>` 格式，避免 GitHub 解析成双@
+- **webhook route.ts action scope**: 修复 TypeScript scope 错误，action 移到 if 块外面
 
 ## [3.4.0] - 2026-05-20
 ### Added
 - **模块化重构**: inbox_processor.sh 拆分为独立模块
-  - `modules/quiet_period.sh` - 安静期控制
+  - `modules/quiet_period.sh` - 安静期控制（30分钟无活动才扫描）
   - `modules/git_sync.sh` - Git同步
-  - `modules/heartbeat.sh` - 心跳注册
-  - `modules/scan_discussions.sh` - Discussion扫描
-  - `modules/scan_issues.sh` - Issue扫描
+  - `modules/heartbeat.sh` - 心跳注册到 Dashboard
+  - `modules/scan_discussions.sh` - Discussion 扫描
+  - `modules/scan_issues.sh` - Issue 扫描
   - `modules/daily_report.sh` - 日报生成（9:00/18:00）
   - `modules/update_activity.sh` - 状态更新
 - **小溪-Answer-太子架构确立**: 明确三层汇报体系
-- **ARCHITECTURE.md**: 架构设计文档 v1.1
-- **Cron 架构调整**: Linux cron 只唤醒，脚本内部控制频率
+- **ARCHITECTURE.md v1.1**: 架构设计文档
 
 ### Changed
 - **太子的 Discussion 规则**: 发有意义的内容，不发无意义的 ACK
 - **Role 标签明确**: Answer 用 `skill/answer`，太子用 `skill/taizi`
-- **README 重写**: 添加架构说明和目录结构
 
 ### Fixed
 - **重复发送消息 Bug**: 修复 `[@@agent/taizi]` 刷屏问题
-- **Force Push 权限**: main 分支保护，禁止 force push
+- **Force Push 权限**: main 分支保护，禁止 force push，需要 PR review
 
 ## [3.3.1] - 2026-05-06
 ### Fixed
