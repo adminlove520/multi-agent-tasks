@@ -17,6 +17,9 @@ if [ -z "$TOKEN" ] || [ -z "$MY_ROLE_LABEL" ] || [ -z "$AGENT_NAME" ]; then
   exit 1
 fi
 
+# 验证身份
+bash "$SCRIPT_DIR/identity.sh" "$AGENT_SLUG" "$MY_ROLE_LABEL" "$AGENT_NAME" || exit 1
+
 [ -z "$AGENT_SLUG" ] && AGENT_SLUG=$(echo "$AGENT_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/ /_/g')
 IDENTITY_LABEL="agent/$AGENT_SLUG"
 VIRTUAL_MENTION="@agent/${AGENT_SLUG}"
