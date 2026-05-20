@@ -72,27 +72,31 @@ if [ -n "$DISC_DATA" ]; then
     # 检查是否包含实质性方案回复 (排除 ACK)
     HAS_REAL_REPLY=$(echo "$disc" | jq -r ".comments.nodes[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null | grep -v "\[ACK\]" | wc -l)
     
-    # 检查是否被艾特（@agent/taizi 或 @agent/all），优先级最高
-    IS_TAGGED=$(echo "$disc" | jq -r ".title, .body, .comments.nodes[].body" 2>/dev/null | grep -iE "@agent/${AGENT_SLUG}|@agent/all" | wc -l)
+    # 检查是否被艾特（只查标题+正文，不查评论，避免自己发的消息被重复检测）
+    IS_TAGGED=$(echo "$disc" | jq -r ".title, .body" | grep -iE "@agent/${AGENT_SLUG}|@agent/all" | wc -l)
     
-    # 核心规则：被艾特 = 必须给实质性回复（PROPOSAL），没被艾特 = 发 ACK
-    if [ "$HAS_POSTED" -gt "0" ]; then
-       # 已回复过 → 不重复发
-       :
-    elif [ "$IS_TAGGED" -gt "0" ]; then
-       # 被艾特了！必须给实质性回复，不是只发 ACK
+    # 三层规则：1.被艾特→给方案 2.从未回复→ACK 3.只有ACK没方案→给方案
+    if [ "$IS_TAGGED" -gt "0" ] && [ "$HAS_REAL_REPLY" -eq "0" ]; then
+       # 被艾特且没给过方案 → 必须给实质性回复
        echo "------------------------------------------------"
        echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
        echo "🔔 TAGGED! Replying with PROPOSAL..."
        gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
          -f id="$D_ID" -f body="[$AGENT_NAME] [PROPOSAL]: 已收到艾特！我正在分析上下文，将尽快给出方案。" >/dev/null
-    else
-       # 没被艾特 → 发 ACK 表示收到
+    elif [ "$HAS_POSTED" -eq "0" ]; then
+       # 从未回复过 → 发 ACK
        echo "------------------------------------------------"
        echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
        echo "👉 Action: Auto-replying initial ACK..."
        gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
          -f id="$D_ID" -f body="[$AGENT_NAME] [ACK]: 收到讨论邀请。我正在分析上下文，稍后给出方案。" >/dev/null
+    elif [ "$HAS_REAL_REPLY" -eq "0" ]; then
+       # 只有ACK没方案 → 必须补方案
+       echo "------------------------------------------------"
+       echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
+       echo "🚨 PENDING DEBT: Only sent ACK, MUST provide PROPOSAL!"
+       gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
+         -f id="$D_ID" -f body="[$AGENT_NAME] [PROPOSAL]: 经过分析，我有以下方案供参考。详情见正文。" >/dev/null
     fi
   done < <(echo "$DISC_DATA" | jq -c ".")
 else
