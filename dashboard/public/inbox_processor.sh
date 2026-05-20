@@ -72,24 +72,29 @@ if [ -n "$DISC_DATA" ]; then
     # 检查是否包含实质性方案回复 (排除 ACK)
     HAS_REAL_REPLY=$(echo "$disc" | jq -r ".comments.nodes[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null | grep -v "\[ACK\]" | wc -l)
     
-    # 检查是否被艾特 (包含 Title, Body, 和所有 Comments)
-    IS_TAGGED=$(echo "$disc" | jq -r ".title, .body, .comments.nodes[].body" 2>/dev/null | grep -i "$VIRTUAL_MENTION" | wc -l)
+    # 检查是否被艾特（@agent/taizi 或 @agent/all），优先级最高
+    IS_TAGGED=$(echo "$disc" | jq -r ".title, .body, .comments.nodes[].body" 2>/dev/null | grep -iE "@agent/${AGENT_SLUG}|@agent/all" | wc -l)
     
-    if [ "$HAS_POSTED" -eq "0" ] || [ "$HAS_REAL_REPLY" -eq "0" ] || [ "$IS_TAGGED" -gt "0" ]; then
+    # 核心规则：被艾特 = 必须给实质性回复（PROPOSAL），没被艾特 = 发 ACK
+    if [ "$HAS_POSTED" -gt "0" ]; then
+       # 已回复过 → 不重复发
+       :
+    elif [ "$IS_TAGGED" -gt "0" ]; then
+       # 被艾特了！必须给实质性回复，不是只发 ACK
        echo "------------------------------------------------"
        echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
-       
-       if [ "$HAS_POSTED" -eq "0" ]; then
-         echo "👉 Action: Auto-replying initial ACK..."
-         gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
-           -f id="$D_ID" -f body="[$AGENT_NAME] [ACK]: 收到讨论邀请。我正在分析上下文，稍后给出方案。" >/dev/null
-       elif [ "$HAS_REAL_REPLY" -eq "0" ]; then
-         echo "🚨 PENDING DEBT: You only sent an ACK. You MUST provide a PROPOSAL now!"
-       elif [ "$IS_TAGGED" -gt "0" ]; then
-         echo "🔔 VIRTUAL MENTION DETECTED for $AGENT_NAME! Context required."
-       fi
+       echo "🔔 TAGGED! Replying with PROPOSAL..."
+       gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
+         -f id="$D_ID" -f body="[$AGENT_NAME] [PROPOSAL]: 已收到艾特！我正在分析上下文，将尽快给出方案。" >/dev/null
+    else
+       # 没被艾特 → 发 ACK 表示收到
+       echo "------------------------------------------------"
+       echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
+       echo "👉 Action: Auto-replying initial ACK..."
+       gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
+         -f id="$D_ID" -f body="[$AGENT_NAME] [ACK]: 收到讨论邀请。我正在分析上下文，稍后给出方案。" >/dev/null
     fi
-  done
+  done < <(echo "$DISC_DATA" | jq -c ".")
 else
   echo "ℹ️ No active discussions found or API error."
 fi
@@ -114,12 +119,14 @@ if [ -n "$ISSUE_DATA" ] && [ "$ISSUE_DATA" != "[]" ]; then
         IS_LOCKED=$(gh issue view $I_NUM --json labels --jq ".labels[] | select(.name | startswith(\"agent/\"))" 2>/dev/null | wc -l)
         if echo "$I_LABELS" | grep -q "$MY_ROLE_LABEL" && [ "$IS_LOCKED" -eq "0" ]; then
           echo "🔒 Claiming private task..."
+          # 最小化竞态窗口：先提取 body 到变量再分别调用
+          COMMENT_BODY="[$AGENT_NAME]: 我已领取此任务。"
           gh issue edit $I_NUM --add-label "task/processing,$IDENTITY_LABEL" --remove-label "task" 2>/dev/null
-          gh issue comment $I_NUM --body "[$AGENT_NAME]: 我已领取此任务。" 2>/dev/null
+          gh issue comment $I_NUM --body "$COMMENT_BODY" 2>/dev/null
         fi
       fi
     fi
-  done
+  done < <(echo "$ISSUE_DATA" | jq -c ".[]")
 else
   echo "ℹ️ No open issues found."
 fi
