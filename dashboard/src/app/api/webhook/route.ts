@@ -27,9 +27,9 @@ export async function POST(req: Request) {
     const { owner, repo } = await getRepoInfo(octokit);
     const tgToken = process.env.TELEGRAM_BOT_TOKEN;
     const tgChatId = process.env.TELEGRAM_CHAT_ID;
-
+    const action = payload.action;
+    
     if (tgToken && tgChatId) {
-      const action = payload.action;
       
       // 1. 新任务通知
       if (event === "issues" && action === "opened") {
