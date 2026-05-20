@@ -34,10 +34,10 @@ echo "$DISC_DATA" | jq -c "." | while read -r disc; do
   if [ "$IS_TAGGED" -gt "0" ] && [ "$HAS_REAL_REPLY" -eq "0" ]; then
     echo "TAGGED in Discussion #$D_NUM: $D_TITLE"
     gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
-      -f id="$D_ID" -f body="[$AGENT_NAME] [PROPOSAL]: 已收到艾特！我正在分析，稍后向将军汇报执行方案。" >/dev/null
+      -f id="$D_ID" -f body="[$AGENT_NAME] [PROPOSAL]: 已收到艾特！我正在分析，稍后给出方案。" >/dev/null
   elif [ "$HAS_POSTED" -eq "0" ]; then
-    # 太子的ACK不公开发Discussion
-    echo "Discussion #$D_NUM: no reply needed (internal ACK only)"
+    # 没有被艾特且从未回复 → 跳过（不发送 ACK）
+    echo "Discussion #$D_NUM: skipped (not tagged, no ACK needed)"
   elif [ "$HAS_REAL_REPLY" -eq "0" ]; then
     echo "Discussion #$D_NUM: PENDING DEBT - needs PROPOSAL"
     gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
