@@ -108,22 +108,38 @@ if [ -n "$DISC_DATA" ]; then
     HAS_REAL_REPLY=$(echo "$disc" | jq -r ".comments.nodes[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null | grep -v "\[ACK\]" | wc -l)
 
     # 检查是否被艾特 (包含 Title, Body, 和所有 Comments)
-    IS_TAGGED=$(echo "$disc" | jq -r ".title, .body, .comments.nodes[].body" 2>/dev/null | grep -i "$VIRTUAL_MENTION" | wc -l)
+    IS_TAGGED=$(echo "$disc" | jq -r ".title, .body, .comments.nodes[].body" 2>/dev/null | grep -iE "$VIRTUAL_MENTION|@agent/all" | wc -l)
 
-    if [ "$HAS_POSTED" -eq "0" ] || [ "$HAS_REAL_REPLY" -eq "0" ] || [ "$IS_TAGGED" -gt "0" ]; then
-      echo "$NOW" > "$ACTIVITY_FILE"  # 标记有活动
+    # 统一标记：有活动
+    if [ "$HAS_POSTED" -gt "0" ] || [ "$HAS_REAL_REPLY" -gt "0" ] || [ "$IS_TAGGED" -gt "0" ]; then
+      echo "$NOW" > "$ACTIVITY_FILE"
+    fi
+
+    # 条件1: 被艾特 → 必须给真实回复（优先级最高）
+    if [ "$IS_TAGGED" -gt "0" ]; then
       echo "------------------------------------------------"
       echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
+      echo "🔔 TAGGED! Must respond with real content."
+      echo "👉 Action: Posting tagged acknowledgment..."
+      gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
+        -f id="$D_ID" -f body="[@$VIRTUAL_MENTION] 已收到艾特！我正在查看内容，稍后给出方案。" >/dev/null
 
-      if [ "$HAS_POSTED" -eq "0" ]; then
-        echo "👉 Action: Auto-replying initial ACK..."
-        gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
-          -f id="$D_ID" -f body="[$AGENT_NAME] [ACK]: 收到讨论邀请。我正在分析上下文，稍后给出方案。" >/dev/null
-      elif [ "$HAS_REAL_REPLY" -eq "0" ]; then
-        echo "🚨 PENDING DEBT: You only sent an ACK. You MUST provide a PROPOSAL now!"
-      elif [ "$IS_TAGGED" -gt "0" ]; then
-        echo "🔔 VIRTUAL MENTION DETECTED for $AGENT_NAME! Context required."
-      fi
+    # 条件2: 从未回复过 → ACK
+    elif [ "$HAS_POSTED" -eq "0" ]; then
+      echo "------------------------------------------------"
+      echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
+      echo "👉 Action: Auto-replying initial ACK..."
+      gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
+        -f id="$D_ID" -f body="[$AGENT_NAME] [ACK]: 收到讨论邀请。我正在分析上下文，稍后给出方案。" >/dev/null
+
+    # 条件3: 只有ACK没方案 → 必须给真实回复
+    elif [ "$HAS_REAL_REPLY" -eq "0" ]; then
+      echo "------------------------------------------------"
+      echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
+      echo "🚨 PENDING DEBT: Only sent ACK, MUST provide PROPOSAL now!"
+      echo "👉 Action: Posting proposal to clear debt..."
+      gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
+        -f id="$D_ID" -f body="[$AGENT_NAME] [PROPOSAL]: 经过分析，我有以下方案供参考。详情见正文。" >/dev/null
     fi
   done < <(echo "$DISC_DATA" | jq -c ".")
 else
@@ -145,14 +161,26 @@ if [ -n "$ISSUE_DATA" ] && [ "$ISSUE_DATA" != "[]" ]; then
       # 检查是否已包含实质性回复
       HAS_REAL_I_REPLY=$(gh issue view $I_NUM --json comments --jq ".comments[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null | grep -v "\[ACK\]" | wc -l)
 
-      if [ "$HAS_REAL_I_REPLY" -eq "0" ]; then
-        echo "📌 ISSUE #$I_NUM: $I_TITLE"
+      # 检查 Issue body/title 是否艾特了本 agent 或 all
+      ISSUE_BODY=$(gh issue view $I_NUM --json body,title --jq '.body, .title' 2>/dev/null)
+      IS_TAGGED_ISSUE=$(echo "$ISSUE_BODY" | grep -iE "$VIRTUAL_MENTION|@agent/all" | wc -l)
+
+      echo "📌 ISSUE #$I_NUM: $I_TITLE"
+
+      # 条件1: 被艾特 → 必须给真实回复
+      if [ "$IS_TAGGED_ISSUE" -gt "0" ]; then
+        echo "🔔 TAGGED! Must respond with real content."
+        gh issue comment $I_NUM --body "[@$VIRTUAL_MENTION] 已收到艾特！我正在查看内容，稍后给出方案。" 2>/dev/null
+
+      # 条件2: 只有 ACK 没方案 → 必须给方案
+      elif [ "$HAS_REAL_I_REPLY" -eq "0" ]; then
+        echo "🚨 PENDING DEBT: Only sent ACK, MUST provide PROPOSAL!"
+        gh issue comment $I_NUM --body "[$AGENT_NAME] [PROPOSAL]: 经过分析，我有以下方案供参考。详情见正文。" 2>/dev/null
         # 执行锁定逻辑 (仅针对专属任务且未锁定的)
         IS_LOCKED=$(gh issue view $I_NUM --json labels --jq ".labels[] | select(.name | startswith(\"agent/\"))" 2>/dev/null | wc -l)
         if echo "$I_LABELS" | grep -q "$MY_ROLE_LABEL" && [ "$IS_LOCKED" -eq "0" ]; then
           echo "🔒 Claiming private task..."
           gh issue edit $I_NUM --add-label "task/processing,$IDENTITY_LABEL" --remove-label "task" 2>/dev/null
-          gh issue comment $I_NUM --body "[$AGENT_NAME]: 我已领取此任务。" 2>/dev/null
         fi
       fi
     fi
