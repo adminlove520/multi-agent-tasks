@@ -13,9 +13,10 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **移除皇帝-将军-兵团称呼**: 全部改用正常名称（小溪、Answer、太子）
 - **cron 参数简化**: 只需传 `token` + `agent_slug`，身份自动从 agents.json 读取
+- **Cron 框架隔离**: OpenClaw 和 Hermes 各跑各的 cron，物理隔离避免冲突
 - **ARCHITECTURE.md v1.3**: 移除皇帝-将军-兵团描述，更新为小溪-Answer-太子架构
 - **README.md**: 重写，更新架构说明和目录结构
-- **docs/AGENT_GUIDE_PROMPT.md**: 更新为正常名称
+- **docs/AGENT_GUIDE_PROMPT.md v2.1**: 更新 cron 部署，框架隔离说明
 - **docs/collector_CN.md**: 更新为正常名称，简化内容
 - **docs/executor_CN.md**: 更新为正常名称，简化内容
 - **docs/role_definition_guide_CN.md**: 更新为正常名称，简化内容
@@ -23,6 +24,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - **scan_discussions 重复消息**: HAS_REAL_REPLY 逻辑改为 grep [PROPOSAL]，不再误判 ACK
 - **scan_issues [@@agent/xxx] 格式**: 改用 `<agent/xxx>` 格式，避免 GitHub 解析成双@
+- **agents.json label 字段**: 修复 role(executor) vs label(skill/taizi) 不一致问题
 - **webhook route.ts action scope**: 修复 TypeScript scope 错误，action 移到 if 块外面
 
 ## [3.4.0] - 2026-05-20

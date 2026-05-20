@@ -44,22 +44,20 @@ multi-agent-tasks/
 
 ## Cron 部署
 
+**原则**：每个 Agent 用自己的框架跑 cron，物理隔离避免冲突
+
+| Agent | 框架 | Cron 配置 |
+|-------|------|----------|
+| Answer | OpenClaw | `openclaw cron add` 命令 |
+| 太子 | Hermes | `hermes cron add` 命令 |
+
+**示例命令**：
 ```bash
-# 通用 cron 命令
-*/5 * * * * cd ~/multi-agent-tasks && bash scripts/inbox_processor.sh "$TOKEN" "{{AGENT_SLUG}}" >> /tmp/agent_{{AGENT_SLUG}}.log 2>&1
-```
+# OpenClaw (Answer)
+openclaw cron add --name "Answer" --cron "*/5 * * * *" --message 'cd ~/multi-agent-tasks && bash scripts/inbox_processor.sh "$TOKEN" "answer"' --announce --channel telegram --to "@Anwsermebot"
 
-**参数说明**：
-- `$TOKEN` - GitHub Personal Access Token
-- `{{AGENT_SLUG}}` - 你的 agent_slug，从 agents.json 配置
-
-**示例**：
-```bash
-# 如果你的 slug 是 "answer"
-*/5 * * * * cd ~/multi-agent-tasks && bash scripts/inbox_processor.sh "$TOKEN" "answer" >> /tmp/agent_answer.log 2>&1
-
-# 如果你的 slug 是 "taizi"
-*/5 * * * * cd ~/multi-agent-tasks && bash scripts/inbox_processor.sh "$TOKEN" "taizi" >> /tmp/agent_taizi.log 2>&1
+# Hermes (太子)
+hermes cron add --name "太子" --cron "*/5 * * * *" --command 'cd ~/multi-agent-tasks && bash scripts/inbox_processor.sh "$TOKEN" "taizi"'
 ```
 
 ## 手动运行测试

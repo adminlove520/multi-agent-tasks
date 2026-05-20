@@ -42,23 +42,29 @@ Multi-Agent Task Collaboration System，基于 GitHub Issues 和 Discussions 进
 - ❌ 不需要知道太子的每个 ACK
 - ❌ 不需要盯每分钟状态更新
 
-## Cron 架构
+## Cron 部署（框架隔离）
 
-**设计原则**：Linux cron 只负责"定期唤醒"，脚本内部控制扫描频率。
+**原则**：每个 Agent 用自己的框架跑 cron，物理隔离避免冲突
 
-```
-Linux cron: 每5分钟触发一次
-    ↓
-inbox_processor.sh: 检查 quiet period
-    ↓
-如果 30 分钟内有活动 → 退出（不扫描）
-如果 30 分钟内没活动 → 扫描一次 → 更新活动时间
-```
+| Agent | 框架 | Cron 配置 |
+|-------|------|----------|
+| Answer | OpenClaw | `openclaw cron` 命令配置 |
+| 太子 | Hermes | `hermes cron` 命令配置 |
 
-**统一 cron 配置**：
+**OpenClaw cron 示例**：
 ```bash
-*/5 * * * * cd ~/multi-agent-tasks && bash scripts/inbox_processor.sh "$TOKEN" "<agent_slug>" >> /tmp/agent_cron.log 2>&1
+openclaw cron add --name "Answer" --cron "*/5 * * * *" --message 'cd ~/multi-agent-tasks && bash scripts/inbox_processor.sh "$TOKEN" "answer"' --announce --channel telegram --to "@Anwsermebot"
 ```
+
+**Hermes cron 示例**：
+```bash
+hermes cron add --name "太子" --cron "*/5 * * * *" --command 'cd ~/multi-agent-tasks && bash scripts/inbox_processor.sh "$TOKEN" "taizi"'
+```
+
+**优势**：
+- 不同框架的 cron 完全隔离，不会互相干扰
+- 不需要进程锁或身份验证
+- 每个 Agent 有自己独立的心跳
 
 **Agent slug 配置**：
 | Agent | slug |
