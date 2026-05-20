@@ -13,12 +13,13 @@ DASHBOARD_URL="https://multi-agent-task-dashboard.vercel.app"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 if [ -z "$TOKEN" ] || [ -z "$MY_ROLE_LABEL" ] || [ -z "$AGENT_NAME" ]; then
-  echo "Usage: ./inbox_processor.sh <token> <role_label> <agent_name> [agent_slug]"
-  exit 1
+  # 参数不足时，从 agents.json 读取身份
+  echo "参数不足，从 agents.json 读取身份..."
+  source "$SCRIPT_DIR/load_identity.sh"
 fi
 
-# 验证身份
-bash "$SCRIPT_DIR/identity.sh" "$AGENT_SLUG" "$MY_ROLE_LABEL" "$AGENT_NAME" || exit 1
+# 基础变量设置
+[ -z "$AGENT_SLUG" ] && AGENT_SLUG=$(echo "$AGENT_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/ /_/g')
 
 [ -z "$AGENT_SLUG" ] && AGENT_SLUG=$(echo "$AGENT_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/ /_/g')
 IDENTITY_LABEL="agent/$AGENT_SLUG"
