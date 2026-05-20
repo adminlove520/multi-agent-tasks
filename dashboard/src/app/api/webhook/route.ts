@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { getRepoInfo } from "@/lib/github";
 import crypto from "crypto";
 import { sendTelegramMessage } from "@/lib/telegram";
+import { appendFileSync, existsSync, mkdirSync } from "fs";
+import path from "path";
 
 export async function POST(req: Request) {
   const body = await req.text();
@@ -67,18 +69,47 @@ export async function POST(req: Request) {
         }
       }
 
-      // 4. Webhook 加速器 (Accelerator)
+      // 4. Webhook 加速器 (Accelerator) + SSRF 防护
       const agentPings = process.env.AGENT_PINGS;
       if (agentPings) {
+        const ALLOWED_DOMAINS = [
+          "your-agent-1.example.com",
+          "your-agent-2.example.com"
+        ];
         const pings = agentPings.split(",");
         pings.forEach(url => {
-          fetch(url.trim(), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ event, action, payload })
-          }).catch(e => console.error("Ping failed", url, e.message));
+          try {
+            const hostname = new URL(url.trim()).hostname;
+            if (!ALLOWED_DOMAINS.includes(hostname)) {
+              console.warn(`Blocked SSRF attempt: ${hostname}`);
+              return;
+            }
+            fetch(url.trim(), {
+              method: "POST",
+              signal: AbortSignal.timeout(5000),
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ event, action, payload })
+            }).catch(e => console.error("Ping failed", url, e.message));
+          } catch (e: any) {
+            console.error(`Invalid ping URL: ${url}`, e.message);
+          }
         });
       }
+    }
+
+    // P0-2: 写入 inbox/events.jsonl
+    try {
+      const inboxDir = path.join(process.cwd(), "inbox");
+      if (!existsSync(inboxDir)) mkdirSync(inboxDir, { recursive: true });
+      const eventLine = JSON.stringify({
+        timestamp: new Date().toISOString(),
+        event: event === "issues" ? "issues" : event === "discussion" || event === "discussion_comment" ? "discussion" : "comment",
+        action,
+        payload
+      }) + "\n";
+      appendFileSync(path.join(inboxDir, "events.jsonl"), eventLine);
+    } catch (e) {
+      console.error("Failed to write to inbox:", e);
     }
 
     return NextResponse.json({ success: true });

@@ -4,11 +4,31 @@ import { Octokit } from "octokit";
 import { NextResponse } from "next/server";
 import { getRepoInfo } from "@/lib/github";
 import { encryptSecret } from "@/lib/crypto";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import path from "path";
 
+// 心跳文件存储路径
 const AGENTS_PATH = "agents.json";
 
-// 全局内存缓存 Agent 心跳 (Node.js 运行时生存周期内有效)
-let agentHeartbeats: Record<string, number> = {};
+const getHeartbeatFile = () => {
+  const dataDir = path.join(process.cwd(), "data");
+  if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
+  return path.join(dataDir, "agent-heartbeats.json");
+};
+
+// 读取心跳
+const readHeartbeats = (): Record<string, number> => {
+  try {
+    return JSON.parse(readFileSync(getHeartbeatFile(), "utf8"));
+  } catch {
+    return {};
+  }
+};
+
+// 写入心跳
+const writeHeartbeats = (heartbeats: Record<string, number>) => {
+  writeFileSync(getHeartbeatFile(), JSON.stringify(heartbeats, null, 2));
+};
 
 export async function GET() {
   const session: any = await getServerSession(authOptions);
@@ -25,11 +45,12 @@ export async function GET() {
       const config = JSON.parse(content);
       
       const now = Date.now();
+      const heartbeats = readHeartbeats();
       const sanitizedAgents = (config.agents || []).map((agent: any) => ({
         ...agent,
         tgToken: agent.tgToken ? "********" : "",
         // 5分钟内有心跳视为在线
-        online: agentHeartbeats[agent.name] && (now - agentHeartbeats[agent.name] < 300000)
+        online: heartbeats[agent.name] && (now - heartbeats[agent.name] < 300000)
       }));
 
       return NextResponse.json({ agents: sanitizedAgents });
@@ -46,8 +67,10 @@ export async function POST(req: Request) {
 
   // 处理心跳上报 (不需要 Session 校验，通过 Token 校验或简单的 Agent 名称即可)
   if (payload.action === "heartbeat") {
-    agentHeartbeats[payload.name] = Date.now();
-    return NextResponse.json({ success: true, timestamp: agentHeartbeats[payload.name] });
+    const heartbeats = readHeartbeats();
+    heartbeats[payload.name] = Date.now();
+    writeHeartbeats(heartbeats);
+    return NextResponse.json({ success: true, timestamp: heartbeats[payload.name] });
   }
 
   const session: any = await getServerSession(authOptions);

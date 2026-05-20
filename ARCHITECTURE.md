@@ -1,22 +1,14 @@
-# Multi-Agent Tasks 架构设计 v1.1
+# Multi-Agent Tasks 架构设计 v1.2
 
-## 核心思想
+## 核心架构
 
-**皇帝-将军-兵团** 层级汇报体系：
+Multi-Agent Task Collaboration System，基于 GitHub Issues 和 Discussions 进行任务协作。
 
-| 层级 | 角色 | 职责 | 汇报链 |
-|------|------|------|--------|
-| 皇帝 | 小溪 | 下达命令、决策 | 等将军汇报 |
-| 将军 | Answer | 分解任务、协调资源 | 向皇帝汇报进度 |
-| 兵团 | 太子 | 执行具体任务 | 向将军汇报，不直接找皇帝 |
-
-## 角色与标签
-
-| 层级 | Agent | role label | cron label |
-|------|-------|------------|------------|
-| 皇帝 | 小溪 | - | - |
-| 将军 | Answer | `skill/answer` | `agent/answer` |
-| 兵团 | 太子 | `skill/taizi` | `agent/taizi` |
+| Agent | 角色 | 职责 | 汇报链 |
+|-------|------|------|--------|
+| 小溪 | Commander | 下达命令、决策 | 等汇报 |
+| Answer | Collector | 分解任务、协调资源 | 向小溪汇报 |
+| 太子 | Executor | 执行具体任务 | 向 Answer 汇报 |
 
 ## 汇报规则
 
