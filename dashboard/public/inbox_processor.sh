@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # Multi-Agent Inbox Processor (v3.3.2)
-# 核心功能：履约检测 (Fulfillment Check)，支持虚拟艾特识别与 Title 扫描
+# 核心功能:履约检测 (Fulfillment Check),支持虚拟艾特识别与 Title 扫描
 
 TOKEN=$1
 MY_ROLE_LABEL=$2  # 例如: skill/answer
 AGENT_NAME=$3     # 智能体名称 (如: 小溪)
-AGENT_SLUG=$4     # 虚拟艾特识别名 (如: xiaoxi，不传则使用 AGENT_NAME 小写)
+AGENT_SLUG=$4     # 虚拟艾特识别名 (如: xiaoxi,不传则使用 AGENT_NAME 小写)
 
 DASHBOARD_URL="https://multi-agent-task-dashboard.vercel.app"
 
@@ -42,8 +42,8 @@ LOCKFILE="/tmp/agent_${AGENT_SLUG}.lock"
 exec 200>$LOCKFILE
 flock -n 200 || { echo "⚠️ Agent $AGENT_NAME is already running. Skipping."; exit 0; }
 
-# 0.5 安静期控制：无活动时降级到30分钟扫描一次
-QUIET_WINDOW=1800  # 30分钟（秒）
+# 0.5 安静期控制:无活动时降级到30分钟扫描一次
+QUIET_WINDOW=1800  # 30分钟(秒)
 STATE_FILE="/tmp/agent_${AGENT_SLUG}_state.json"
 ACTIVITY_FILE="/tmp/agent_${AGENT_SLUG}_activity.tmp"
 
@@ -59,7 +59,7 @@ write_state() {
 read_state
 NOW=$(date +%s)
 
-# 判断是否应该扫描：近期有通知就扫，或距上次扫描已超30分钟
+# 判断是否应该扫描:近期有通知就扫,或距上次扫描已超30分钟
 SHOULD_SCAN=0
 if [ $((NOW - LAST_ACTIVITY)) -lt $QUIET_WINDOW ]; then
   SHOULD_SCAN=1
@@ -105,37 +105,41 @@ if [ -n "$DISC_DATA" ]; then
     # 检查是否包含实质性方案回复 (排除 ACK)
     HAS_REAL_REPLY=$(echo "$disc" | jq -r ".comments.nodes[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null | grep -v "\[ACK\]" | wc -l)
 
-    # 检查是否被艾特（只查标题+正文，不查评论，避免自己发的消息被重复检测）
-    IS_TAGGED=$(echo "$disc" | jq -r ".title, .body" | grep -iE "@agent/${AGENT_SLUG}|@agent/all" | wc -l)
+    # 检查是否被艾特(只查标题+正文,不查评论)
+    # 规则:只响应 @agent/taizi(不响应 @agent/all,那是将军的职责)
+    IS_TAGGED=$(echo "$disc" | jq -r ".title, .body" | grep -i "@agent/${AGENT_SLUG}" | wc -l)
 
-    # 统一标记：有活动
+    # 统一标记:有活动
     if [ "$HAS_POSTED" -gt "0" ] || [ "$HAS_REAL_REPLY" -gt "0" ] || [ "$IS_TAGGED" -gt "0" ]; then
       echo "$NOW" > "$ACTIVITY_FILE"
     fi
 
-    # 三层规则：1.被艾特且无方案→给方案 2.从未回复→ACK 3.只有ACK没方案→给方案
+    # 太子的三层规则(兵团不响应 @agent/all)
+    # 规则:
+    # 1. 被 @agent/taizi 艾特且无 PROPOSAL → 发 PROPOSAL(向将军汇报思路)
+    # 2. 从未回复过 → 发 ACK(内部记录,不需要公开发 Discussion)
+    # 3. 只有 ACK 没方案 → 发 PROPOSAL(必须完成)
     if [ "$IS_TAGGED" -gt "0" ] && [ "$HAS_REAL_REPLY" -eq "0" ]; then
       echo "------------------------------------------------"
       echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
       echo "🔔 TAGGED! Replying with PROPOSAL..."
       gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
-        -f id="$D_ID" -f body="[$AGENT_NAME] [PROPOSAL]: 已收到艾特！我正在分析上下文，将尽快给出方案。" >/dev/null
+        -f id="$D_ID" -f body="[$AGENT_NAME] [PROPOSAL]: 已收到艾特!我正在分析,稍后向将军汇报执行方案。" >/dev/null
     elif [ "$HAS_POSTED" -eq "0" ]; then
+      # 太子的 ACK 不用公开发 Discussion(内部记录即可)
       echo "------------------------------------------------"
       echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
-      echo "👉 Action: Auto-replying initial ACK..."
-      gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
-        -f id="$D_ID" -f body="[$AGENT_NAME] [ACK]: 收到讨论邀请。我正在分析上下文，稍后给出方案。" >/dev/null
+      echo "👉 Action: 内部记录 ACK(不公开发)"
     elif [ "$HAS_REAL_REPLY" -eq "0" ]; then
       echo "------------------------------------------------"
       echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
       echo "🚨 PENDING DEBT: Only sent ACK, MUST provide PROPOSAL!"
       gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
-        -f id="$D_ID" -f body="[$AGENT_NAME] [PROPOSAL]: 经过分析，我有以下方案供参考。详情见正文。" >/dev/null
+        -f id="$D_ID" -f body="[$AGENT_NAME] [PROPOSAL]: 经过分析,执行方案如下。" >/dev/null
     fi
   done < <(echo "$DISC_DATA" | jq -c ".")
 else
-  echo "ℹ️ No active discussions found or API error."
+  echo "i️ No active discussions found or API error."
 fi
 
 # 4. 扫描 Issues (任务区)
@@ -148,24 +152,24 @@ if [ -n "$ISSUE_DATA" ] && [ "$ISSUE_DATA" != "[]" ]; then
     I_TITLE=$(echo "$issue" | jq -r '.title')
     I_LABELS=$(echo "$issue" | jq -r '.labels[].name')
 
+    # 规则：太子只响应 @agent/taizi（不响应 @agent/all，那是将军的职责）
+    ISSUE_BODY=$(gh issue view $I_NUM --json body,title --jq '[.body, .title] | join(" ")' 2>/dev/null)
+    IS_TAGGED_ISSUE=$(echo "$ISSUE_BODY" | grep -i "@agent/${AGENT_SLUG}" | wc -l)
+    
     if echo "$I_LABELS" | grep -qE "($MY_ROLE_LABEL|skill/all)"; then
       # 检查是否已包含实质性回复
       HAS_REAL_I_REPLY=$(gh issue view $I_NUM --json comments --jq ".comments[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null | grep -v "\[ACK\]" | wc -l)
-
-      # 检查 Issue 标题/正文是否艾特了本 agent 或 all（不查评论）
-      ISSUE_BODY=$(gh issue view $I_NUM --json body,title --jq '[.body, .title] | join(" ")' 2>/dev/null)
-      IS_TAGGED_ISSUE=$(echo "$ISSUE_BODY" | grep -iE "@agent/${AGENT_SLUG}|@agent/all" | wc -l)
-
+      
       echo "📌 ISSUE #$I_NUM: $I_TITLE"
-
-      # 三层规则
+      
+      # 太子的三层规则
       if [ "$IS_TAGGED_ISSUE" -gt "0" ] && [ "$HAS_REAL_I_REPLY" -eq "0" ]; then
-        echo "🔔 TAGGED! Must respond with real content."
-        gh issue comment $I_NUM --body="[@$VIRTUAL_MENTION] 收到艾特！我正在查看内容，稍后给出方案。" 2>/dev/null
+        echo "🔔 TAGGED! Replying to Issue..."
+        gh issue comment $I_NUM --body="[@$VIRTUAL_MENTION] 已收到艾特！我正在查看，稍后向将军汇报执行方案。" 2>/dev/null
       elif [ "$HAS_REAL_I_REPLY" -eq "0" ]; then
         echo "🚨 PENDING DEBT: Only sent ACK, MUST provide PROPOSAL!"
-        gh issue comment $I_NUM --body="[$AGENT_NAME] [PROPOSAL]: 经过分析，我有以下方案供参考。详情见正文。" 2>/dev/null
-        # 执行锁定逻辑 (仅针对专属任务且未锁定的)
+        gh issue comment $I_NUM --body="[$AGENT_NAME] [PROPOSAL]: 经过分析，执行方案如下。" 2>/dev/null
+        # 执行锁定逻辑
         IS_LOCKED=$(gh issue view $I_NUM --json labels --jq ".labels[] | select(.name | startswith(\"agent/\"))" 2>/dev/null | wc -l)
         if echo "$I_LABELS" | grep -q "$MY_ROLE_LABEL" && [ "$IS_LOCKED" -eq "0" ]; then
           echo "🔒 Claiming private task..."
@@ -175,7 +179,7 @@ if [ -n "$ISSUE_DATA" ] && [ "$ISSUE_DATA" != "[]" ]; then
     fi
   done < <(echo "$ISSUE_DATA" | jq -c ".[]")
 else
-  echo "ℹ️ No open issues found."
+  echo "i️ No open issues found."
 fi
 
 # 合并活动状态
