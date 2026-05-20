@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Multi-Agent Inbox Processor (v3.3.1)
+# Multi-Agent Inbox Processor (v3.3.2)
 # 核心功能：履约检测 (Fulfillment Check)，支持虚拟艾特识别与 Title 扫描
 
 TOKEN=$1
@@ -42,9 +42,43 @@ LOCKFILE="/tmp/agent_${AGENT_SLUG}.lock"
 exec 200>$LOCKFILE
 flock -n 200 || { echo "⚠️ Agent $AGENT_NAME is already running. Skipping."; exit 0; }
 
+# 0.5 安静期控制：无活动时降级到30分钟扫描一次
+QUIET_WINDOW=1800  # 30分钟（秒）
+STATE_FILE="/tmp/agent_${AGENT_SLUG}_state.json"
+ACTIVITY_FILE="/tmp/agent_${AGENT_SLUG}_activity.tmp"
+
+read_state() {
+  LAST_ACTIVITY=$(jq -r '.last_activity // 0' "$STATE_FILE" 2>/dev/null || echo 0)
+  LAST_SCAN=$(jq -r '.last_scan // 0' "$STATE_FILE" 2>/dev/null || echo 0)
+}
+write_state() {
+  jq -n --arg a "$LAST_ACTIVITY" --arg s "$LAST_SCAN" \
+    '{"last_activity":($a|tonumber),"last_scan":($s|tonumber)}' > "$STATE_FILE"
+}
+
+read_state
+NOW=$(date +%s)
+
+# 判断是否应该扫描：近期有通知就扫，或距上次扫描已超30分钟
+SHOULD_SCAN=0
+if [ $((NOW - LAST_ACTIVITY)) -lt $QUIET_WINDOW ]; then
+  SHOULD_SCAN=1
+elif [ $((NOW - LAST_SCAN)) -ge $QUIET_WINDOW ]; then
+  SHOULD_SCAN=1
+fi
+
+if [ "$SHOULD_SCAN" -eq 0 ]; then
+  AGE=$((NOW - LAST_ACTIVITY))
+  echo "😴 Quiet period (no recent notifications). Skip scan. Last activity: ${AGE}s ago"
+  exit 0
+fi
+
+# 初始化活动文件
+echo 0 > "$ACTIVITY_FILE"
+
 # 1. 增量更新 (如果是在 Git 仓库内)
 if [ -d ".git" ]; then
-  git fetch origin main >/dev/null 2>&1 && git reset --hard origin main >/dev/null 2>&1
+  git fetch origin main >/dev/null 2>&1 && git reset --hard origin/main >/dev/null 2>&1
 fi
 
 # 2. 注册活跃状态 (Heartbeat)
@@ -55,44 +89,49 @@ curl -s -X POST "$DASHBOARD_URL/api/agents" \
 # 3. 扫描逻辑 (GraphQL)
 echo "🕵️ [3/4] Scanning Discussions..."
 
-# 扫描最近的 10 个讨论
 DISC_QUERY='query($owner:String!,$repo:String!){repository(owner:$owner,name:$repo){discussions(first:10,orderBy:{field:CREATED_AT,direction:DESC}){nodes{id,number,title,url,body,comments(last:20){nodes{author{login},body}}}}}}'
 
 DISC_DATA=$(gh api graphql -f owner="$OWNER" -f repo="$REPO_NAME" -f query="$DISC_QUERY" --jq ".data.repository.discussions.nodes[]" 2>/dev/null)
 
 if [ -n "$DISC_DATA" ]; then
-  echo "$DISC_DATA" | jq -c "." | while read -r disc; do
+  while read -r disc; do
     D_ID=$(echo "$disc" | jq -r '.id')
     D_NUM=$(echo "$disc" | jq -r '.number')
     D_TITLE=$(echo "$disc" | jq -r '.title')
-    
+
     # 检查自己是否已发布过回复 (根据 [AgentName] 前缀判断)
     HAS_POSTED=$(echo "$disc" | jq -r ".comments.nodes[] | .body" 2>/dev/null | grep -F "[$AGENT_NAME]" | wc -l)
-    
+
     # 检查是否包含实质性方案回复 (排除 ACK)
     HAS_REAL_REPLY=$(echo "$disc" | jq -r ".comments.nodes[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null | grep -v "\[ACK\]" | wc -l)
-    
-    # 检查是否被艾特（@agent/taizi 或 @agent/all），优先级最高
-    IS_TAGGED=$(echo "$disc" | jq -r ".title, .body, .comments.nodes[].body" 2>/dev/null | grep -iE "@agent/${AGENT_SLUG}|@agent/all" | wc -l)
-    
-    # 核心规则：被艾特 = 必须给实质性回复（PROPOSAL），没被艾特 = 发 ACK
-    if [ "$HAS_POSTED" -gt "0" ]; then
-       # 已回复过 → 不重复发
-       :
-    elif [ "$IS_TAGGED" -gt "0" ]; then
-       # 被艾特了！必须给实质性回复，不是只发 ACK
-       echo "------------------------------------------------"
-       echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
-       echo "🔔 TAGGED! Replying with PROPOSAL..."
-       gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
-         -f id="$D_ID" -f body="[$AGENT_NAME] [PROPOSAL]: 已收到艾特！我正在分析上下文，将尽快给出方案。" >/dev/null
-    else
-       # 没被艾特 → 发 ACK 表示收到
-       echo "------------------------------------------------"
-       echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
-       echo "👉 Action: Auto-replying initial ACK..."
-       gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
-         -f id="$D_ID" -f body="[$AGENT_NAME] [ACK]: 收到讨论邀请。我正在分析上下文，稍后给出方案。" >/dev/null
+
+    # 检查是否被艾特（只查标题+正文，不查评论，避免自己发的消息被重复检测）
+    IS_TAGGED=$(echo "$disc" | jq -r ".title, .body" | grep -iE "@agent/${AGENT_SLUG}|@agent/all" | wc -l)
+
+    # 统一标记：有活动
+    if [ "$HAS_POSTED" -gt "0" ] || [ "$HAS_REAL_REPLY" -gt "0" ] || [ "$IS_TAGGED" -gt "0" ]; then
+      echo "$NOW" > "$ACTIVITY_FILE"
+    fi
+
+    # 三层规则：1.被艾特且无方案→给方案 2.从未回复→ACK 3.只有ACK没方案→给方案
+    if [ "$IS_TAGGED" -gt "0" ] && [ "$HAS_REAL_REPLY" -eq "0" ]; then
+      echo "------------------------------------------------"
+      echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
+      echo "🔔 TAGGED! Replying with PROPOSAL..."
+      gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
+        -f id="$D_ID" -f body="[$AGENT_NAME] [PROPOSAL]: 已收到艾特！我正在分析上下文，将尽快给出方案。" >/dev/null
+    elif [ "$HAS_POSTED" -eq "0" ]; then
+      echo "------------------------------------------------"
+      echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
+      echo "👉 Action: Auto-replying initial ACK..."
+      gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
+        -f id="$D_ID" -f body="[$AGENT_NAME] [ACK]: 收到讨论邀请。我正在分析上下文，稍后给出方案。" >/dev/null
+    elif [ "$HAS_REAL_REPLY" -eq "0" ]; then
+      echo "------------------------------------------------"
+      echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
+      echo "🚨 PENDING DEBT: Only sent ACK, MUST provide PROPOSAL!"
+      gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
+        -f id="$D_ID" -f body="[$AGENT_NAME] [PROPOSAL]: 经过分析，我有以下方案供参考。详情见正文。" >/dev/null
     fi
   done < <(echo "$DISC_DATA" | jq -c ".")
 else
@@ -104,25 +143,33 @@ echo "🔍 [4/4] Scanning Issues..."
 ISSUE_DATA=$(gh issue list --state open --json number,title,labels --limit 20 2>/dev/null)
 
 if [ -n "$ISSUE_DATA" ] && [ "$ISSUE_DATA" != "[]" ]; then
-  echo "$ISSUE_DATA" | jq -c ".[]" | while read -r issue; do
+  while read -r issue; do
     I_NUM=$(echo "$issue" | jq -r '.number')
     I_TITLE=$(echo "$issue" | jq -r '.title')
     I_LABELS=$(echo "$issue" | jq -r '.labels[].name')
-    
+
     if echo "$I_LABELS" | grep -qE "($MY_ROLE_LABEL|skill/all)"; then
       # 检查是否已包含实质性回复
       HAS_REAL_I_REPLY=$(gh issue view $I_NUM --json comments --jq ".comments[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null | grep -v "\[ACK\]" | wc -l)
-      
-      if [ "$HAS_REAL_I_REPLY" -eq "0" ]; then
-        echo "📌 ISSUE #$I_NUM: $I_TITLE"
+
+      # 检查 Issue 标题/正文是否艾特了本 agent 或 all（不查评论）
+      ISSUE_BODY=$(gh issue view $I_NUM --json body,title --jq '[.body, .title] | join(" ")' 2>/dev/null)
+      IS_TAGGED_ISSUE=$(echo "$ISSUE_BODY" | grep -iE "@agent/${AGENT_SLUG}|@agent/all" | wc -l)
+
+      echo "📌 ISSUE #$I_NUM: $I_TITLE"
+
+      # 三层规则
+      if [ "$IS_TAGGED_ISSUE" -gt "0" ] && [ "$HAS_REAL_I_REPLY" -eq "0" ]; then
+        echo "🔔 TAGGED! Must respond with real content."
+        gh issue comment $I_NUM --body="[@$VIRTUAL_MENTION] 收到艾特！我正在查看内容，稍后给出方案。" 2>/dev/null
+      elif [ "$HAS_REAL_I_REPLY" -eq "0" ]; then
+        echo "🚨 PENDING DEBT: Only sent ACK, MUST provide PROPOSAL!"
+        gh issue comment $I_NUM --body="[$AGENT_NAME] [PROPOSAL]: 经过分析，我有以下方案供参考。详情见正文。" 2>/dev/null
         # 执行锁定逻辑 (仅针对专属任务且未锁定的)
         IS_LOCKED=$(gh issue view $I_NUM --json labels --jq ".labels[] | select(.name | startswith(\"agent/\"))" 2>/dev/null | wc -l)
         if echo "$I_LABELS" | grep -q "$MY_ROLE_LABEL" && [ "$IS_LOCKED" -eq "0" ]; then
           echo "🔒 Claiming private task..."
-          # 最小化竞态窗口：先提取 body 到变量再分别调用
-          COMMENT_BODY="[$AGENT_NAME]: 我已领取此任务。"
           gh issue edit $I_NUM --add-label "task/processing,$IDENTITY_LABEL" --remove-label "task" 2>/dev/null
-          gh issue comment $I_NUM --body "$COMMENT_BODY" 2>/dev/null
         fi
       fi
     fi
@@ -130,6 +177,17 @@ if [ -n "$ISSUE_DATA" ] && [ "$ISSUE_DATA" != "[]" ]; then
 else
   echo "ℹ️ No open issues found."
 fi
+
+# 合并活动状态
+ACTIVITY_TS=$(cat "$ACTIVITY_FILE" 2>/dev/null || echo 0)
+rm -f "$ACTIVITY_FILE"
+if [ "$ACTIVITY_TS" != "0" ] && [ "$ACTIVITY_TS" -gt "$LAST_ACTIVITY" ]; then
+  LAST_ACTIVITY=$ACTIVITY_TS
+fi
+
+# 写入状态
+LAST_SCAN=$NOW
+write_state
 
 echo "===================================================="
 echo "✅ Scan complete."
