@@ -39,16 +39,22 @@ echo "$ISSUE_DATA" | jq -c ".[]" | while read -r issue; do
   ISSUE_BODY=$(gh issue view $I_NUM --json body,title --jq '[.body, .title] | join(" ")' 2>/dev/null)
   IS_TAGGED_ISSUE=$(echo "$ISSUE_BODY" | grep -iE "@agent/all|@agent/${AGENT_SLUG}" | wc -l)
 
+  # skill/all label 也视为被艾特（全员广播）
+  HAS_SKILL_ALL=$(echo "$I_LABELS" | grep -c "skill/all" || true)
+
   echo "Issue #$I_NUM: $I_TITLE"
 
-  # 场景1：被艾特 + 没回复过 → 发 PROPOSAL + 认领
-  if [ "$IS_TAGGED_ISSUE" -gt "0" ] && [ "$HAS_REAL_I_REPLY" -eq "0" ]; then
-    echo "  → 被艾特，认领 + 发 PROPOSAL"
+  # 触发条件：被@ 或 有 skill/all label
+  SHOULD_RESPOND=$((IS_TAGGED_ISSUE + HAS_SKILL_ALL))
+
+  # 场景1：触发 + 没回复过 → 发诚实通知 + 认领
+  if [ "$SHOULD_RESPOND" -gt "0" ] && [ "$HAS_REAL_I_REPLY" -eq "0" ]; then
+    echo "  → 触发（tagged=${IS_TAGGED_ISSUE}, skill/all=${HAS_SKILL_ALL}），认领 + 发通知"
     gh issue edit $I_NUM --add-label "task/processing,$IDENTITY_LABEL" --remove-label "task" 2>/dev/null
     gh issue comment $I_NUM --body="@${AGENT_SLUG} 收到任务，我来分析一下，有结果后向你汇报。" 2>/dev/null
-  # 场景2：没被艾特 + 没回复过 → 跳过（不打扰）
+  # 场景2：没触发 + 没回复过 → 跳过（不打扰）
   elif [ "$HAS_REAL_I_REPLY" -eq "0" ]; then
-    echo "  → 没被艾特，跳过（不打扰）"
+    echo "  → 没被艾特且无 skill/all，跳过（不打扰）"
   fi
 done
 
