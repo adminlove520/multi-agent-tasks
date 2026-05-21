@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.8.0] - 2026-05-21
+### Added
+- **sync_personality.sh**: 自动化同步脚本，从 SKILL.md 读取 personality 到 agents.json
+  - Source of Truth: SKILL.md 的 `## 🎭 性格定义` 章节
+  - 提取 `trait`、`summary`、`keywords`
+  - 用法: `./scripts/sync_personality.sh [--dry-run]`
+
+### Changed
+- **agents.json 更新**: 重新从 SKILL.md 同步 personality 数据
+
 ## [3.7.0] - 2026-05-21
 ### Added
 - **skill/role 广播支持**: inbox_processor.sh v3.5.0 支持 skill/executor、skill/collector 等角色专属广播
