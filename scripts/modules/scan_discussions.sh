@@ -28,8 +28,8 @@ echo "$DISC_DATA" | jq -c "." | while read -r disc; do
   D_NUM=$(echo "$disc" | jq -r '.number')
   D_TITLE=$(echo "$disc" | jq -r '.title')
 
-  # 检查是否已有实质性回复（包含 [PROPOSAL]）
-  HAS_REAL_REPLY=$(echo "$disc" | jq -r ".comments.nodes[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null | grep -i "\[PROPOSAL\]" | wc -l)
+  # 检查是否已有实质性回复（包含 @slug + [PROPOSAL]）
+  HAS_REAL_REPLY=$(echo "$disc" | jq -r ".comments.nodes[] | select(.body | contains(\"@${AGENT_SLUG}\")) | .body" 2>/dev/null | grep -i "\[PROPOSAL\]" | wc -l)
 
   # 检查是否被艾特（标题+正文，不查评论避免自己触发自己）
   IS_TAGGED=$(echo "$disc" | jq -r ".title, .body" | grep -i "@agent/${AGENT_SLUG}" | wc -l)
@@ -40,7 +40,7 @@ echo "$DISC_DATA" | jq -c "." | while read -r disc; do
   if [ "$IS_TAGGED" -gt "0" ] && [ "$HAS_REAL_REPLY" -eq "0" ]; then
     echo "  → 被艾特，发 PROPOSAL"
     gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
-      -f id="$D_ID" -f body="[$AGENT_NAME] [PROPOSAL]: 已收到艾特！经过分析，执行方案如下。" >/dev/null
+      -f id="$D_ID" -f body="@${AGENT_SLUG} [PROPOSAL]: 已收到艾特！经过分析，执行方案如下。" >/dev/null
   # 场景2：没被艾特 → 跳过（不打扰）
   else
     echo "  → 没被艾特，跳过（不打扰）"
