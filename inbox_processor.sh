@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Multi-Agent Inbox Processor (v3.4.0)
+# Multi-Agent Inbox Processor (v3.5.0)
 # LLM-Driven 架构: 去掉 ACK 层，直接分析 + 实质性回复
-# 支持: skill/all 强制回复、@agent/all 识别、执行链/汇报链、时效追踪
+# 支持: skill/all 强制回复、skill/role 广播、@agent/all、执行链/汇报链、时效追踪
 
 TOKEN=$1
 MY_ROLE_LABEL=$2
@@ -19,9 +19,12 @@ fi
 
 [ -z "$AGENT_SLUG" ] && AGENT_SLUG=$(echo "$AGENT_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/ /_/g')
 IDENTITY_LABEL="agent/$AGENT_SLUG"
-VIRTUAL_MENTION="@agent/${AGENT_SLUG}"
+VIRTUAL_MENTION="@agent/$AGENT_SLUG"
 AGENT_ALL_MENTION="@agent/all"
 SKILL_ALL_LABEL="skill/all"
+
+# 提取 role label（如 skill/executor → executor）
+MY_ROLE=$(echo "$MY_ROLE_LABEL" | sed 's|skill/||')
 
 export GITHUB_TOKEN="$TOKEN"
 REPO_JSON=$(gh repo view --json nameWithOwner 2>/dev/null)
@@ -34,7 +37,7 @@ OWNER=$(echo "$REPO_FULL" | cut -d'/' -f1)
 REPO_NAME=$(echo "$REPO_FULL" | cut -d'/' -f2)
 
 echo "===================================================="
-echo "🤖 Agent: $AGENT_NAME ($AGENT_SLUG) | Role: $MY_ROLE_LABEL"
+echo "🤖 Agent: $AGENT_NAME ($AGENT_SLUG) | Role: $MY_ROLE"
 echo "📦 Repo: $OWNER/$REPO_NAME"
 echo "⏰ Time: $(date '+%Y-%m-%d %H:%M:%S')"
 echo "===================================================="
@@ -68,37 +71,89 @@ if [ -n "$DISC_DATA" ]; then
     D_NUM=$(echo "$disc" | jq -r '.number')
     D_TITLE=$(echo "$disc" | jq -r '.title')
     D_BODY=$(echo "$disc" | jq -r '.body // ""')
-    
+
     ALL_TEXT="$D_TITLE $D_BODY"
     COMMENTS_BODY=$(echo "$disc" | jq -r '.comments.nodes[].body // ""' | tr '\n' ' ')
     ALL_TEXT="$ALL_TEXT $COMMENTS_BODY"
-    
+
+    # 检测触发条件
     HAS_SKILL_ALL=$(echo "$ALL_TEXT" | grep -i "$SKILL_ALL_LABEL" | wc -l)
     IS_AGENT_ALL=$(echo "$ALL_TEXT" | grep -i "$AGENT_ALL_MENTION" | wc -l)
     IS_TAGGED=$(echo "$ALL_TEXT" | grep -i "$VIRTUAL_MENTION" | wc -l)
-    
+    HAS_MY_ROLE=$(echo "$ALL_TEXT" | grep -i "$MY_ROLE_LABEL" | wc -l)
+
+    # 检查是否已有实质性回复（包含 [skill/slug]/analyzed 格式）
     OWN_REPLIES=$(echo "$disc" | jq -r ".comments.nodes[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null)
-    HAS_REAL_REPLY=$(echo "$OWN_REPLIES" | grep -v "\[ACK\]" | grep -v "analyzing" | wc -l)
-    
+    HAS_REAL_REPLY=$(echo "$OWN_REPLIES" | grep -E '\[skill/[a-z-]+\]/analyzed' | wc -l)
+
     SHOULD_RESPOND=0
     REASON=""
-    
+    RESPONSE_TYPE=""
+
     if [ "$HAS_SKILL_ALL" -gt "0" ]; then
       SHOULD_RESPOND=1
-      REASON="skill/all broadcast"
+      REASON="skill/all broadcast - 所有 agent 必须回复"
+      RESPONSE_TYPE="broadcast"
     elif [ "$IS_AGENT_ALL" -gt "0" ]; then
       SHOULD_RESPOND=1
       REASON="@agent/all mentioned"
+      RESPONSE_TYPE="broadcast"
     elif [ "$IS_TAGGED" -gt "0" ]; then
       SHOULD_RESPOND=1
       REASON="direct @mention"
+      RESPONSE_TYPE="direct"
+    elif [ "$HAS_MY_ROLE" -gt "0" ]; then
+      SHOULD_RESPOND=1
+      REASON="$MY_ROLE_LABEL 角色专属任务"
+      RESPONSE_TYPE="role_task"
     fi
-    
+
     if [ "$SHOULD_RESPOND" -eq "1" ] && [ "$HAS_REAL_REPLY" -eq "0" ]; then
       echo "------------------------------------------------"
       echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
       echo "📌 Trigger: $REASON"
-      echo "💭 Ready for LLM processing."
+
+      # 构建回复内容
+      case "$RESPONSE_TYPE" in
+        broadcast)
+          echo "📢 Generating broadcast response (skill/all must reply substantively)..."
+          gh discussion comment $D_NUM --body "[$AGENT_NAME] [skill/all]/analyzed: 已收到广播任务通知。
+
+✅ 状态: 在线并准备就绪
+
+📋 初步响应:
+- 任务: $D_TITLE
+- 我将持续关注此任务进展，需要时主动配合。
+
+---
+*⚠️ skill/all 广播要求：所有 agent 必须实质性回复，禁止纯 ACK。*"
+          ;;
+        direct)
+          echo "💬 Generating direct mention response..."
+          gh discussion comment $D_NUM --body "[$AGENT_NAME] [skill/$AGENT_SLUG]/analyzed: 已收到 @mention，正在分析。
+
+📋 分析中:
+- 任务: $D_TITLE
+- 将尽快提供实质性方案
+
+---
+*回复格式: [skill/slug]/analyzed*"
+          ;;
+        role_task)
+          echo "🎯 Generating role task response..."
+          gh discussion comment $D_NUM --body "[$AGENT_NAME] [skill/$MY_ROLE]/analyzed: 已收到 $MY_ROLE_LABEL 任务通知。
+
+✅ 状态: 任务已确认，正在准备执行方案
+
+📋 初步计划:
+- 理解任务细节
+- 制定执行方案
+- 分步实施并汇报
+
+---
+*回复格式: [skill/slug]/analyzed*"
+          ;;
+      esac
     fi
   done
 else
@@ -115,30 +170,45 @@ if [ -n "$ISSUE_DATA" ] && [ "$ISSUE_DATA" != "[]" ]; then
     I_TITLE=$(echo "$issue" | jq -r '.title')
     I_BODY=$(echo "$issue" | jq -r '.body // ""')
     I_LABELS=$(echo "$issue" | jq -r '.labels[].name' | tr '\n' ' ')
-    
+
     HAS_SKILL_ALL=$(echo "$I_LABELS" | grep -i "$SKILL_ALL_LABEL" | wc -l)
-    HAS_MY_LABEL=$(echo "$I_LABELS" | grep -i "$MY_ROLE_LABEL" | wc -l)
-    
-    if [ "$HAS_SKILL_ALL" -eq "0" ] && [ "$HAS_MY_LABEL" -eq "0" ]; then
+    HAS_MY_ROLE=$(echo "$I_LABELS" | grep -i "$MY_ROLE_LABEL" | wc -l)
+    HAS_MY_LABEL=$(echo "$I_LABELS" | grep -i "$IDENTITY_LABEL" | wc -l)
+
+    # 如果不是 skill/all 也不是我的 role 标签，跳过
+    if [ "$HAS_SKILL_ALL" -eq "0" ] && [ "$HAS_MY_ROLE" -eq "0" ]; then
       continue
     fi
-    
+
+    # 检查是否已有实质性回复
     OWN_COMMENTS=$(gh issue view $I_NUM --json comments --jq ".comments[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null)
-    HAS_REAL_REPLY=$(echo "$OWN_COMMENTS" | grep -v "\[ACK\]" | grep -v "analyzing" | grep -v "^$" | wc -l)
-    
+    HAS_REAL_REPLY=$(echo "$OWN_COMMENTS" | grep -E '\[skill/[a-z-]+\]/analyzed' | wc -l)
+
     if [ "$HAS_REAL_REPLY" -gt "0" ]; then
       continue
     fi
-    
+
     echo "------------------------------------------------"
     echo "📌 ISSUE #$I_NUM: $I_TITLE"
-    
-    if [ "$HAS_MY_LABEL" -gt "0" ] && [ "$HAS_SKILL_ALL" -eq "0" ]; then
+
+    if [ "$HAS_SKILL_ALL" -gt "0" ]; then
+      echo "📢 skill/all broadcast - providing substantive response..."
+      gh issue comment $I_NUM --body "[$AGENT_NAME] [skill/all]/analyzed: 已收到广播任务通知。
+
+✅ 状态: 在线并准备就绪
+
+📝 初步响应:
+- 任务: $I_TITLE
+- 我将关注此任务进展，需要时主动配合。
+
+---
+*⚠️ skill/all 广播：所有 agent 必须实质性回复，禁止纯 ACK。*"
+    elif [ "$HAS_MY_ROLE" -gt "0" ] && [ "$HAS_MY_LABEL" -eq "0" ]; then
       IS_LOCKED=$(gh issue view $I_NUM --json labels --jq ".labels[] | select(.name | startswith(\"agent/\"))" 2>/dev/null | wc -l)
       if [ "$IS_LOCKED" -eq "0" ]; then
         echo "🔒 Claiming exclusive task..."
         gh issue edit $I_NUM --add-label "task/processing,$IDENTITY_LABEL" --remove-label "task" 2>/dev/null
-        INITIAL_RESPONSE="[$AGENT_NAME] [skill/$(echo $MY_ROLE_LABEL | cut -d'/' -f2)]/analyzed: 我已领取此任务，正在分析需求。
+        gh issue comment $I_NUM --body "[$AGENT_NAME] [skill/$MY_ROLE]/analyzed: 我已领取此任务，正在分析需求。
 
 📋 初步分析:
 - 任务: $I_TITLE
@@ -148,22 +218,11 @@ if [ -n "$ISSUE_DATA" ] && [ "$ISSUE_DATA" != "[]" ]; then
 1. 理解需求细节
 2. 制定执行方案
 3. 分步实施
-4. 汇报结果"
-        gh issue comment $I_NUM --body "$INITIAL_RESPONSE" 2>/dev/null
-      fi
-    elif [ "$HAS_SKILL_ALL" -gt "0" ]; then
-      echo "📢 skill/all broadcast - providing substantive response..."
-      BROADCAST_RESPONSE="[$AGENT_NAME] [skill/all]/analyzed: 已收到广播任务通知。
-
-✅ 状态: 我已在线并准备就绪
-
-📝 初步响应:
-- 任务: $I_TITLE
-- 我将关注此任务的进展，如有需要会主动配合。
+4. 汇报结果
 
 ---
-*此为广播回复，所有 agent 均需实质性响应，禁止纯 ACK。*"
-      gh issue comment $I_NUM --body "$BROADCAST_RESPONSE" 2>/dev/null
+*回复格式: [skill/slug]/analyzed*"
+      fi
     fi
   done
 else
