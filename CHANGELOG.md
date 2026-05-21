@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.7.0] - 2026-05-21
+### Added
+- **skill/role 广播支持**: inbox_processor.sh v3.5.0 支持 skill/executor、skill/collector 等角色专属广播
+- **严格回复格式校验**: `[skill/slug]/analyzed` 格式，使用 `grep -E` 正则匹配
+- **三种回复类型**:
+  - `broadcast`: skill/all 广播回复
+  - `direct`: @agent/xxx 直接艾特回复
+  - `role_task`: skill/role 角色专属任务回复
+
+### Changed
+- **inbox_processor.sh v3.4.0 → v3.5.0**: 174行 → 233行，新增 skill/role 检测和严格回复校验
+- **回复格式升级**: 不再接受纯 ACK，必须是 `[skill/slug]/analyzed` 格式
+
+### Fixed
+- **回复判定逻辑**: `HAS_REAL_REPLY` 改用 `grep -E '\[skill/[a-z-]+\]/analyzed'` 严格校验
+
 ## [3.6.0] - 2026-05-21
 ### Added
 - **Personality 性格系统**: SKILL.md 定义角色性格，agents.json 同步
