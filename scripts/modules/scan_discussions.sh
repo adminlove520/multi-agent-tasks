@@ -32,7 +32,8 @@ echo "$DISC_DATA" | jq -c "." | while read -r disc; do
   HAS_REAL_REPLY=$(echo "$disc" | jq -r ".comments.nodes[] | select(.body | contains(\"@${AGENT_SLUG}\")) | .body" 2>/dev/null | grep -i "\[PROPOSAL\]" | wc -l)
 
   # 检查是否被艾特（标题+正文，不查评论避免自己触发自己）
-  IS_TAGGED=$(echo "$disc" | jq -r ".title, .body" | grep -i "@agent/${AGENT_SLUG}" | wc -l)
+  # @agent/all → 所有agent都要回，@agent/taizi → 只有我回
+  IS_TAGGED=$(echo "$disc" | jq -r ".title, .body" | grep -iE "@agent/all|@agent/${AGENT_SLUG}" | wc -l)
 
   echo "Discussion #$D_NUM: $D_TITLE"
 
