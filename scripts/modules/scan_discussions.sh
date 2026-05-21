@@ -1,5 +1,6 @@
 #!/bin/bash
 # scan_discussions.sh - 扫描讨论
+# 规则：被艾特才回复（发实质性PROPOSAL），没被艾特不打扰
 
 TOKEN="$1"
 OWNER="$2"
@@ -27,26 +28,22 @@ echo "$DISC_DATA" | jq -c "." | while read -r disc; do
   D_NUM=$(echo "$disc" | jq -r '.number')
   D_TITLE=$(echo "$disc" | jq -r '.title')
 
-  # 检查是否已发布过回复（只要包含 [@AgentName] 前缀就算，不管内容类型）
-  HAS_POSTED=$(echo "$disc" | jq -r ".comments.nodes[] | .body" 2>/dev/null | grep -F "[$AGENT_NAME]" | wc -l)
-  
-  # 检查是否包含实质性方案回复（包含 [PROPOSAL]）
+  # 检查是否已有实质性回复（包含 [PROPOSAL]）
   HAS_REAL_REPLY=$(echo "$disc" | jq -r ".comments.nodes[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null | grep -i "\[PROPOSAL\]" | wc -l)
-  
-  # 检查是否被艾特（只查标题+正文，不查评论）
+
+  # 检查是否被艾特（标题+正文，不查评论避免自己触发自己）
   IS_TAGGED=$(echo "$disc" | jq -r ".title, .body" | grep -i "@agent/${AGENT_SLUG}" | wc -l)
 
+  echo "Discussion #$D_NUM: $D_TITLE"
+
+  # 场景1：被艾特 + 没回复过 → 发 PROPOSAL
   if [ "$IS_TAGGED" -gt "0" ] && [ "$HAS_REAL_REPLY" -eq "0" ]; then
-    echo "TAGGED in Discussion #$D_NUM: $D_TITLE"
+    echo "  → 被艾特，发 PROPOSAL"
     gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
-      -f id="$D_ID" -f body="[$AGENT_NAME] [PROPOSAL]: 已收到艾特！我正在分析，稍后给出方案。" >/dev/null
-  elif [ "$HAS_POSTED" -eq "0" ]; then
-    # 没有被艾特且从未回复 → 跳过（不发送 ACK）
-    echo "Discussion #$D_NUM: skipped (not tagged, no ACK needed)"
-  elif [ "$HAS_REAL_REPLY" -eq "0" ]; then
-    echo "Discussion #$D_NUM: PENDING DEBT - needs PROPOSAL"
-    gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
-      -f id="$D_ID" -f body="[$AGENT_NAME] [PROPOSAL]: 经过分析，执行方案如下。" >/dev/null
+      -f id="$D_ID" -f body="[$AGENT_NAME] [PROPOSAL]: 已收到艾特！经过分析，执行方案如下。" >/dev/null
+  # 场景2：没被艾特 → 跳过（不打扰）
+  else
+    echo "  → 没被艾特，跳过（不打扰）"
   fi
 done
 
