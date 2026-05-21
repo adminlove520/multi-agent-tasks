@@ -35,8 +35,9 @@ echo "$ISSUE_DATA" | jq -c ".[]" | while read -r issue; do
     ".comments[] | select(.body | contains(\"[$AGENT_NAME]\")) | select(.body | test(\"[PROPOSAL]\")) | .body" 2>/dev/null | wc -l)
 
   # 检查是否被艾特（标题+正文）
+  # @agent/all → 所有agent都要回，@agent/taizi → 只有我回
   ISSUE_BODY=$(gh issue view $I_NUM --json body,title --jq '[.body, .title] | join(" ")' 2>/dev/null)
-  IS_TAGGED_ISSUE=$(echo "$ISSUE_BODY" | grep -i "@agent/${AGENT_SLUG}" | wc -l)
+  IS_TAGGED_ISSUE=$(echo "$ISSUE_BODY" | grep -iE "@agent/all|@agent/${AGENT_SLUG}" | wc -l)
 
   echo "Issue #$I_NUM: $I_TITLE"
 
