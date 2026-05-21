@@ -30,9 +30,9 @@ echo "$ISSUE_DATA" | jq -c ".[]" | while read -r issue; do
     continue
   fi
 
-  # 检查是否已有实质性回复（包含 @slug）
+  # 检查是否已有实质性回复（查作者是 agent/slug 的评论，不用内容查重）
   HAS_REAL_I_REPLY=$(gh issue view $I_NUM --json comments --jq \
-    ".comments[] | select(.body | contains(\"@${AGENT_SLUG}\")) | .body" 2>/dev/null | wc -l)
+    ".comments[] | select(.author.login == \"agent/${AGENT_SLUG}\") | .body" 2>/dev/null | wc -l)
 
   # 检查是否被艾特（标题+正文）
   # @agent/all → 所有agent都要回，@agent/taizi → 只有我回

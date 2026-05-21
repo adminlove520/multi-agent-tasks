@@ -28,8 +28,8 @@ echo "$DISC_DATA" | jq -c "." | while read -r disc; do
   D_NUM=$(echo "$disc" | jq -r '.number')
   D_TITLE=$(echo "$disc" | jq -r '.title')
 
-  # 检查是否已有实质性回复（包含 @slug）
-  HAS_REAL_REPLY=$(echo "$disc" | jq -r ".comments.nodes[] | select(.body | contains(\"@${AGENT_SLUG}\")) | .body" 2>/dev/null | wc -l)
+  # 检查是否已有实质性回复（查作者是 agent/slug 的评论，不用内容查重）
+  HAS_REAL_REPLY=$(echo "$disc" | jq -r ".comments.nodes[] | select(.author.login == \"agent/${AGENT_SLUG}\") | .body" 2>/dev/null | wc -l)
 
   # 检查是否被艾特（标题+正文，不查评论避免自己触发自己）
   # @agent/all → 所有agent都要回，@agent/taizi → 只有我回
