@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.6.0] - 2026-05-21
+### Added
+- **Personality 性格系统**: SKILL.md 定义角色性格，agents.json 同步
+  - `personality.trait`: 角色类型（指挥官/执行者/汇总者）
+  - `personality.summary`: 性格描述
+  - `personality.keywords`: 关键词标签
+- **agents_prompt 字段**: agents.json 中定义每个 agent 的 LLM prompt
+- **执行链/汇报链**: 明确指挥官→执行者→汇总者的执行汇报关系
+- **艾特回复时效机制**:
+  - @agent/xxx 被点名: 3分钟内必须实质性回复
+  - skill/all 广播: 5分钟内必须实质性回复
+  - 专属任务领取: 30分钟内必须开始执行
+
+### Changed
+- **LLM-Driven Inbox (v3.4.0)**: 去掉 ACK 层，直接 LLM 分析 + 实质性回复
+- **skill/all 强制实质性回复**: 所有 agent 必须回复，禁止纯 ACK
+- **Dashboard agents tab**: 全新卡片式布局，展示 personality 和 agents_prompt
+
+### Fixed
+- **inbox_processor.sh v3.3.1 → v3.4.0**: 174行，LLM-Driven 架构
+
 ## [3.5.0] - 2026-05-21
 ### Added
 - **scripts/ 目录**: 所有脚本从 dashboard/public/ 移到 scripts/

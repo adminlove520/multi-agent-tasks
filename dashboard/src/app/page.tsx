@@ -612,66 +612,101 @@ export default function Home() {
                     </div>
                   ) : (
                     agents.map((agent) => (
-                      <div key={agent.id} className="group relative grid grid-cols-1 md:grid-cols-4 gap-4 p-6 bg-gray-50 rounded-2xl border border-gray-200 hover:border-blue-200 transition-all">
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between">
-                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t.agents.name}</label>
-                            {agent.online && (
-                              <span className="flex items-center gap-1 text-[10px] text-green-600 font-bold bg-green-50 px-2 py-0.5 rounded-full animate-pulse">
-                                <span className="h-1.5 w-1.5 rounded-full bg-green-500"></span>
-                                Online
-                              </span>
-                            )}
+                      <div key={agent.id} className="group relative rounded-2xl border border-gray-200 bg-white p-6 hover:border-blue-200 transition-all shadow-sm">
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-black text-lg shadow-lg">
+                              {agent.name?.charAt(0) || '?'}
+                            </div>
+                            <div>
+                              <input 
+                                type="text" 
+                                className="bg-transparent border-none text-lg font-black text-gray-900 outline-none focus:ring-2 focus:ring-blue-500 rounded px-1 -ml-1"
+                                value={agent.name}
+                                onChange={(e) => handleAgentChange(agent.id, "name", e.target.value)}
+                                placeholder="Agent Name"
+                              />
+                              {agent.online && (
+                                <span className="flex items-center gap-1 text-[10px] text-green-600 font-bold bg-green-50 px-2 py-0.5 rounded-full animate-pulse mt-1">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-green-500"></span>
+                                  Online
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <input 
-                            type="text" 
-                            className="w-full bg-white border border-gray-200 rounded-lg p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                            value={agent.name}
-                            onChange={(e) => handleAgentChange(agent.id, "name", e.target.value)}
-                            placeholder="e.g. 小溪"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t.agents.role}</label>
-                          <select 
-                            className="w-full bg-white border border-gray-200 rounded-lg p-2 text-sm font-bold outline-none"
-                            value={agent.role}
-                            onChange={(e) => handleAgentChange(agent.id, "role", e.target.value)}
-                          >
-                            <option value="commander">指挥官 (Commander)</option>
-                            <option value="executor">执行者 (Executor)</option>
-                            <option value="collector">汇总者 (Collector)</option>
-                          </select>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t.agents.framework}</label>
-                          <select 
-                            className="w-full bg-white border border-gray-200 rounded-lg p-2 text-sm font-bold outline-none"
-                            value={agent.framework}
-                            onChange={(e) => handleAgentChange(agent.id, "framework", e.target.value)}
-                          >
-                            <option value="openclaw">OpenClaw Agent</option>
-                            <option value="hermes">Hermes Agent</option>
-                            <option value="other">Other Framework</option>
-                          </select>
-                        </div>
-                        <div className="space-y-1 relative">
-                          <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t.agents.tg_token}</label>
-                          <input 
-                            type="password" 
-                            className="w-full bg-white border border-gray-200 rounded-lg p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 pr-10"
-                            value={agent.tgToken}
-                            onChange={(e) => handleAgentChange(agent.id, "tgToken", e.target.value)}
-                            placeholder="Optional secret"
-                          />
                           <button 
                             onClick={() => handleRemoveAgent(agent.id)}
-                            className="absolute -top-1 -right-1 p-1.5 bg-white text-red-500 border border-gray-100 rounded-full hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100 shadow-sm"
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-all"
                           >
-                            <Trash2 className="h-3 w-3" />
+                            <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
+                        
+                        {agent.personality && (
+                          <div className="mb-4 p-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-blue-100">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="px-2 py-0.5 bg-blue-600 text-white text-[10px] font-black rounded-full uppercase">
+                                {agent.personality.trait || agent.role}
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-600 leading-relaxed mb-2">
+                              {agent.personality.summary || 'No description'}
+                            </p>
+                            <div className="flex flex-wrap gap-1">
+                              {(agent.personality.keywords || []).map((kw: string, i: number) => (
+                                <span key={i} className="px-1.5 py-0.5 bg-white text-gray-500 text-[10px] font-medium rounded border border-gray-200">
+                                  {kw}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t.agents.role}</label>
+                            <select 
+                              className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                              value={agent.role}
+                              onChange={(e) => handleAgentChange(agent.id, "role", e.target.value)}
+                            >
+                              <option value="commander">Commander</option>
+                              <option value="executor">Executor</option>
+                              <option value="collector">Collector</option>
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t.agents.framework}</label>
+                            <select 
+                              className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs font-bold outline-none"
+                              value={agent.framework}
+                              onChange={(e) => handleAgentChange(agent.id, "framework", e.target.value)}
+                            >
+                              <option value="openclaw">OpenClaw</option>
+                              <option value="hermes">Hermes</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t.agents.tg_token}</label>
+                            <input 
+                              type="password" 
+                              className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                              value={agent.tgToken}
+                              onChange={(e) => handleAgentChange(agent.id, "tgToken", e.target.value)}
+                              placeholder="Token"
+                            />
+                          </div>
+                        </div>
+                        
+                        {agent.agents_prompt && (
+                          <div className="mt-3 p-2 bg-gray-900 rounded-lg">
+                            <div className="text-[10px] text-gray-500 font-black uppercase mb-1">agents_prompt</div>
+                            <p className="text-[10px] text-blue-400 font-mono line-clamp-2 leading-relaxed">
+                              {agent.agents_prompt.substring(0, 100)}...
+                            </p>
+                          </div>
+                        )}
                       </div>
                     ))
                   )}

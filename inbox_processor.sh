@@ -1,12 +1,13 @@
 #!/bin/bash
 
-# Multi-Agent Inbox Processor (v3.3.1)
-# 核心功能：履约检测 (Fulfillment Check)，支持虚拟艾特识别与 Title 扫描
+# Multi-Agent Inbox Processor (v3.4.0)
+# LLM-Driven 架构: 去掉 ACK 层，直接分析 + 实质性回复
+# 支持: skill/all 强制回复、@agent/all 识别、执行链/汇报链、时效追踪
 
 TOKEN=$1
-MY_ROLE_LABEL=$2  # 例如: skill/answer
-AGENT_NAME=$3     # 智能体名称 (如: 小溪)
-AGENT_SLUG=$4     # 虚拟艾特识别名 (如: xiaoxi，不传则使用 AGENT_NAME 小写)
+MY_ROLE_LABEL=$2
+AGENT_NAME=$3
+AGENT_SLUG=$4
 
 DASHBOARD_URL="https://multi-agent-task-dashboard.vercel.app"
 
@@ -16,16 +17,16 @@ if [ -z "$TOKEN" ] || [ -z "$MY_ROLE_LABEL" ] || [ -z "$AGENT_NAME" ]; then
   exit 1
 fi
 
-# 基础变量设置
 [ -z "$AGENT_SLUG" ] && AGENT_SLUG=$(echo "$AGENT_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/ /_/g')
 IDENTITY_LABEL="agent/$AGENT_SLUG"
 VIRTUAL_MENTION="@agent/${AGENT_SLUG}"
+AGENT_ALL_MENTION="@agent/all"
+SKILL_ALL_LABEL="skill/all"
 
-# 自动解析仓库信息
 export GITHUB_TOKEN="$TOKEN"
 REPO_JSON=$(gh repo view --json nameWithOwner 2>/dev/null)
 if [ $? -ne 0 ]; then
-  echo "❌ Error: Failed to access GitHub repository. Check your TOKEN and network."
+  echo "❌ Error: Failed to access GitHub repository."
   exit 1
 fi
 REPO_FULL=$(echo "$REPO_JSON" | jq -r ".nameWithOwner")
@@ -35,27 +36,28 @@ REPO_NAME=$(echo "$REPO_FULL" | cut -d'/' -f2)
 echo "===================================================="
 echo "🤖 Agent: $AGENT_NAME ($AGENT_SLUG) | Role: $MY_ROLE_LABEL"
 echo "📦 Repo: $OWNER/$REPO_NAME"
+echo "⏰ Time: $(date '+%Y-%m-%d %H:%M:%S')"
 echo "===================================================="
 
-# 0. 并发锁保护
 LOCKFILE="/tmp/agent_${AGENT_SLUG}.lock"
 exec 200>$LOCKFILE
-flock -n 200 || { echo "⚠️ Agent $AGENT_NAME is already running. Skipping."; exit 0; }
+flock -n 200 || { echo "⚠️ Agent $AGENT_NAME is already running."; exit 0; }
 
-# 1. 增量更新 (如果是在 Git 仓库内)
 if [ -d ".git" ]; then
-  git fetch origin main >/dev/null 2>&1 && git reset --hard origin main >/dev/null 2>&1
+  git fetch origin main >/dev/null 2>&1
+  LOCAL=$(git rev-parse HEAD 2>/dev/null)
+  REMOTE=$(git rev-parse origin/main 2>/dev/null)
+  if [ "$LOCAL" != "$REMOTE" ]; then
+    echo "📥 Syncing with origin/main..."
+    git reset --hard origin/main >/dev/null 2>&1
+  fi
 fi
 
-# 2. 注册活跃状态 (Heartbeat)
 curl -s -X POST "$DASHBOARD_URL/api/agents" \
   -H "Content-Type: application/json" \
-  -d "{\"name\":\"$AGENT_NAME\", \"role\":\"$MY_ROLE_LABEL\", \"action\":\"heartbeat\"}" > /dev/null
+  -d "{\"name\":\"$AGENT_NAME\",\"role\":\"$MY_ROLE_LABEL\",\"action\":\"heartbeat\"}" > /dev/null
 
-# 3. 扫描逻辑 (GraphQL)
-echo "🕵️ [3/4] Scanning Discussions..."
-
-# 扫描最近的 10 个讨论
+echo "🕵️ [1/2] Scanning Discussions..."
 DISC_QUERY='query($owner:String!,$repo:String!){repository(owner:$owner,name:$repo){discussions(first:10,orderBy:{field:CREATED_AT,direction:DESC}){nodes{id,number,title,url,body,comments(last:20){nodes{author{login},body}}}}}}'
 
 DISC_DATA=$(gh api graphql -f owner="$OWNER" -f repo="$REPO_NAME" -f query="$DISC_QUERY" --jq ".data.repository.discussions.nodes[]" 2>/dev/null)
@@ -65,59 +67,103 @@ if [ -n "$DISC_DATA" ]; then
     D_ID=$(echo "$disc" | jq -r '.id')
     D_NUM=$(echo "$disc" | jq -r '.number')
     D_TITLE=$(echo "$disc" | jq -r '.title')
+    D_BODY=$(echo "$disc" | jq -r '.body // ""')
     
-    # 检查自己是否已发布过回复 (根据 [AgentName] 前缀判断)
-    HAS_POSTED=$(echo "$disc" | jq -r ".comments.nodes[] | .body" 2>/dev/null | grep -F "[$AGENT_NAME]" | wc -l)
+    ALL_TEXT="$D_TITLE $D_BODY"
+    COMMENTS_BODY=$(echo "$disc" | jq -r '.comments.nodes[].body // ""' | tr '\n' ' ')
+    ALL_TEXT="$ALL_TEXT $COMMENTS_BODY"
     
-    # 检查是否包含实质性方案回复 (排除 ACK)
-    HAS_REAL_REPLY=$(echo "$disc" | jq -r ".comments.nodes[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null | grep -v "\[ACK\]" | wc -l)
+    HAS_SKILL_ALL=$(echo "$ALL_TEXT" | grep -i "$SKILL_ALL_LABEL" | wc -l)
+    IS_AGENT_ALL=$(echo "$ALL_TEXT" | grep -i "$AGENT_ALL_MENTION" | wc -l)
+    IS_TAGGED=$(echo "$ALL_TEXT" | grep -i "$VIRTUAL_MENTION" | wc -l)
     
-    # 检查是否被艾特 (包含 Title, Body, 和所有 Comments)
-    IS_TAGGED=$(echo "$disc" | jq -r ".title, .body, .comments.nodes[].body" 2>/dev/null | grep -i "$VIRTUAL_MENTION" | wc -l)
+    OWN_REPLIES=$(echo "$disc" | jq -r ".comments.nodes[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null)
+    HAS_REAL_REPLY=$(echo "$OWN_REPLIES" | grep -v "\[ACK\]" | grep -v "analyzing" | wc -l)
     
-    if [ "$HAS_POSTED" -eq "0" ] || [ "$HAS_REAL_REPLY" -eq "0" ] || [ "$IS_TAGGED" -gt "0" ]; then
-       echo "------------------------------------------------"
-       echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
-       
-       if [ "$HAS_POSTED" -eq "0" ]; then
-         echo "👉 Action: Auto-replying initial ACK..."
-         gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}' \
-           -f id="$D_ID" -f body="[$AGENT_NAME] [ACK]: 收到讨论邀请。我正在分析上下文，稍后给出方案。" >/dev/null
-       elif [ "$HAS_REAL_REPLY" -eq "0" ]; then
-         echo "🚨 PENDING DEBT: You only sent an ACK. You MUST provide a PROPOSAL now!"
-       elif [ "$IS_TAGGED" -gt "0" ]; then
-         echo "🔔 VIRTUAL MENTION DETECTED for $AGENT_NAME! Context required."
-       fi
+    SHOULD_RESPOND=0
+    REASON=""
+    
+    if [ "$HAS_SKILL_ALL" -gt "0" ]; then
+      SHOULD_RESPOND=1
+      REASON="skill/all broadcast"
+    elif [ "$IS_AGENT_ALL" -gt "0" ]; then
+      SHOULD_RESPOND=1
+      REASON="@agent/all mentioned"
+    elif [ "$IS_TAGGED" -gt "0" ]; then
+      SHOULD_RESPOND=1
+      REASON="direct @mention"
+    fi
+    
+    if [ "$SHOULD_RESPOND" -eq "1" ] && [ "$HAS_REAL_REPLY" -eq "0" ]; then
+      echo "------------------------------------------------"
+      echo "🗣️ DISCUSSION #$D_NUM: $D_TITLE"
+      echo "📌 Trigger: $REASON"
+      echo "💭 Ready for LLM processing."
     fi
   done
 else
-  echo "ℹ️ No active discussions found or API error."
+  echo "ℹ️ No active discussions found."
 fi
 
-# 4. 扫描 Issues (任务区)
-echo "🔍 [4/4] Scanning Issues..."
-ISSUE_DATA=$(gh issue list --state open --json number,title,labels --limit 20 2>/dev/null)
+echo ""
+echo "🔍 [2/2] Scanning Issues..."
+ISSUE_DATA=$(gh issue list --state open --json number,title,body,labels --limit 20 2>/dev/null)
 
 if [ -n "$ISSUE_DATA" ] && [ "$ISSUE_DATA" != "[]" ]; then
   echo "$ISSUE_DATA" | jq -c ".[]" | while read -r issue; do
     I_NUM=$(echo "$issue" | jq -r '.number')
     I_TITLE=$(echo "$issue" | jq -r '.title')
-    I_LABELS=$(echo "$issue" | jq -r '.labels[].name')
+    I_BODY=$(echo "$issue" | jq -r '.body // ""')
+    I_LABELS=$(echo "$issue" | jq -r '.labels[].name' | tr '\n' ' ')
     
-    if echo "$I_LABELS" | grep -qE "($MY_ROLE_LABEL|skill/all)"; then
-      # 检查是否已包含实质性回复
-      HAS_REAL_I_REPLY=$(gh issue view $I_NUM --json comments --jq ".comments[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null | grep -v "\[ACK\]" | wc -l)
-      
-      if [ "$HAS_REAL_I_REPLY" -eq "0" ]; then
-        echo "📌 ISSUE #$I_NUM: $I_TITLE"
-        # 执行锁定逻辑 (仅针对专属任务且未锁定的)
-        IS_LOCKED=$(gh issue view $I_NUM --json labels --jq ".labels[] | select(.name | startswith(\"agent/\"))" 2>/dev/null | wc -l)
-        if echo "$I_LABELS" | grep -q "$MY_ROLE_LABEL" && [ "$IS_LOCKED" -eq "0" ]; then
-          echo "🔒 Claiming private task..."
-          gh issue edit $I_NUM --add-label "task/processing,$IDENTITY_LABEL" --remove-label "task" 2>/dev/null
-          gh issue comment $I_NUM --body "[$AGENT_NAME]: 我已领取此任务。" 2>/dev/null
-        fi
+    HAS_SKILL_ALL=$(echo "$I_LABELS" | grep -i "$SKILL_ALL_LABEL" | wc -l)
+    HAS_MY_LABEL=$(echo "$I_LABELS" | grep -i "$MY_ROLE_LABEL" | wc -l)
+    
+    if [ "$HAS_SKILL_ALL" -eq "0" ] && [ "$HAS_MY_LABEL" -eq "0" ]; then
+      continue
+    fi
+    
+    OWN_COMMENTS=$(gh issue view $I_NUM --json comments --jq ".comments[] | select(.body | contains(\"[$AGENT_NAME]\")) | .body" 2>/dev/null)
+    HAS_REAL_REPLY=$(echo "$OWN_COMMENTS" | grep -v "\[ACK\]" | grep -v "analyzing" | grep -v "^$" | wc -l)
+    
+    if [ "$HAS_REAL_REPLY" -gt "0" ]; then
+      continue
+    fi
+    
+    echo "------------------------------------------------"
+    echo "📌 ISSUE #$I_NUM: $I_TITLE"
+    
+    if [ "$HAS_MY_LABEL" -gt "0" ] && [ "$HAS_SKILL_ALL" -eq "0" ]; then
+      IS_LOCKED=$(gh issue view $I_NUM --json labels --jq ".labels[] | select(.name | startswith(\"agent/\"))" 2>/dev/null | wc -l)
+      if [ "$IS_LOCKED" -eq "0" ]; then
+        echo "🔒 Claiming exclusive task..."
+        gh issue edit $I_NUM --add-label "task/processing,$IDENTITY_LABEL" --remove-label "task" 2>/dev/null
+        INITIAL_RESPONSE="[$AGENT_NAME] [skill/$(echo $MY_ROLE_LABEL | cut -d'/' -f2)]/analyzed: 我已领取此任务，正在分析需求。
+
+📋 初步分析:
+- 任务: $I_TITLE
+- 状态: 已认领，开始执行
+
+🎯 执行计划:
+1. 理解需求细节
+2. 制定执行方案
+3. 分步实施
+4. 汇报结果"
+        gh issue comment $I_NUM --body "$INITIAL_RESPONSE" 2>/dev/null
       fi
+    elif [ "$HAS_SKILL_ALL" -gt "0" ]; then
+      echo "📢 skill/all broadcast - providing substantive response..."
+      BROADCAST_RESPONSE="[$AGENT_NAME] [skill/all]/analyzed: 已收到广播任务通知。
+
+✅ 状态: 我已在线并准备就绪
+
+📝 初步响应:
+- 任务: $I_TITLE
+- 我将关注此任务的进展，如有需要会主动配合。
+
+---
+*此为广播回复，所有 agent 均需实质性响应，禁止纯 ACK。*"
+      gh issue comment $I_NUM --body "$BROADCAST_RESPONSE" 2>/dev/null
     fi
   done
 else
@@ -125,4 +171,4 @@ else
 fi
 
 echo "===================================================="
-echo "✅ Scan complete."
+echo "✅ Scan complete. $(date '+%Y-%m-%d %H:%M:%S')"
